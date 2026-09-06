@@ -34,9 +34,9 @@ export const StepDestination: React.FC<StepDestinationProps> = ({
     onCustomsChange({
       moroccoOptions: {
         isMRE: checked,
-        mreAgeOver60: checked ? (customs.moroccoOptions?.mreAgeOver60 ?? true) : false,
-        residenceOver10Years: checked ? (customs.moroccoOptions?.residenceOver10Years ?? true) : false,
-        isFirstCarInLife: checked ? (customs.moroccoOptions?.isFirstCarInLife ?? true) : false
+        mreAgeOver60: checked ? (customs.moroccoOptions?.mreAgeOver60 ?? false) : false,
+        residenceOver10Years: checked ? (customs.moroccoOptions?.residenceOver10Years ?? false) : false,
+        isFirstCarInLife: checked ? (customs.moroccoOptions?.isFirstCarInLife ?? false) : false
       }
     });
   };
@@ -80,7 +80,7 @@ export const StepDestination: React.FC<StepDestinationProps> = ({
             >
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center space-x-2">
-                  <span className="text-2xl">🇸🇳</span>
+                   <span className="text-xs font-bold uppercase tracking-widest text-emerald-700">SN</span>
                   <span className="text-lg font-black text-slate-900">Sénégal</span>
                 </div>
                 <span className="text-xs font-semibold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300">
@@ -91,8 +91,8 @@ export const StepDestination: React.FC<StepDestinationProps> = ({
                 Cadre standard pour véhicules d'occasion. Décret officiel récent.
               </p>
               <div className="text-[11px] font-medium text-emerald-800 bg-emerald-100/70 p-2 rounded-lg">
-                ✓ Âge max : <strong>10 ans</strong> (Décret 24 oct. 2025)<br />
-                ✓ Douane estimée : <strong>~44.5%</strong> sur base CAF
+                Âge max : <strong>10 ans</strong> (Décret 24 oct. 2025)<br />
+                Douane estimée : <strong>~44.5%</strong> sur base CAF
               </div>
             </div>
 
@@ -106,7 +106,7 @@ export const StepDestination: React.FC<StepDestinationProps> = ({
             >
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center space-x-2">
-                  <span className="text-2xl">🇲🇦</span>
+                   <span className="text-xs font-bold uppercase tracking-widest text-orange-700">MA</span>
                   <span className="text-lg font-black text-slate-900">Maroc</span>
                 </div>
                 <span className="text-xs font-semibold px-2 py-0.5 rounded bg-orange-100 text-orange-800 border border-orange-300">
@@ -117,8 +117,8 @@ export const StepDestination: React.FC<StepDestinationProps> = ({
                 Importation très réglementée. Régime MRE avantageux.
               </p>
               <div className="text-[11px] font-medium text-orange-800 bg-orange-100/70 p-2 rounded-lg">
-                ⚠ Régime MRE : <strong>5 ans max</strong> (abattement 90%)<br />
-                ⚠ Régime commercial : <strong>autorisation requise</strong>
+                Régime MRE : <strong>5 ans max</strong> (abattement 90%)<br />
+                Régime commercial : <strong>autorisation requise</strong>
               </div>
             </div>
 
@@ -197,22 +197,32 @@ export const StepDestination: React.FC<StepDestinationProps> = ({
             </p>
 
             {isMRE && (
-              <div className="bg-white p-3.5 rounded-lg border border-orange-200 space-y-2 text-xs text-slate-800">
-                <div className="font-bold text-orange-950">Conditions légales requises pour l'abattement 90% :</div>
+              <div className="bg-white p-3.5 rounded-lg border border-orange-200 space-y-3 text-xs text-slate-800">
+                 <div className="font-bold text-orange-950">Confirmez chaque condition avant d’appliquer l’abattement :</div>
                 <div className="flex items-center space-x-2">
                   <span className={vehicleAge <= 5 ? "text-emerald-600 font-bold" : "text-red-600 font-bold"}>
-                    {vehicleAge <= 5 ? "✓" : "✗"}
+                    {vehicleAge <= 5 ? "Conforme" : "À vérifier"}
                   </span>
                   <span>Véhicule de moins de 5 ans (Actuel : {vehicleAge} an(s) - Année min. {CURRENT_YEAR - 5})</span>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <span className="text-emerald-600 font-bold">✓</span>
-                  <span>Âge de l'acquéreur : 60 ans et plus</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <span className="text-emerald-600 font-bold">✓</span>
-                  <span>Résidence effective à l'étranger de 10 ans minimum</span>
-                </div>
+                 {[
+                   ['mreAgeOver60', 'L’acquéreur a 60 ans ou plus'],
+                   ['residenceOver10Years', 'Résidence effective à l’étranger depuis au moins 10 ans'],
+                   ['isFirstCarInLife', 'Première admission bénéficiant de cet avantage'],
+                 ].map(([key, label]) => (
+                   <label key={key} className="flex min-h-[42px] cursor-pointer items-center gap-3 rounded-lg border border-slate-200 px-3 py-2">
+                     <input
+                       type="checkbox"
+                       checked={Boolean(customs.moroccoOptions?.[key as keyof typeof customs.moroccoOptions])}
+                       onChange={(event) => onCustomsChange({ moroccoOptions: { ...customs.moroccoOptions!, [key]: event.target.checked } })}
+                       className="h-5 w-5 rounded border-slate-300 text-orange-600"
+                     />
+                     <span>{label}</span>
+                   </label>
+                 ))}
+                 <p className="rounded-lg bg-amber-50 px-3 py-2 text-amber-900">
+                   Sans confirmation complète, la simulation applique automatiquement le régime standard.
+                 </p>
               </div>
             )}
           </div>
@@ -224,11 +234,11 @@ export const StepDestination: React.FC<StepDestinationProps> = ({
             <div className="flex items-center space-x-2">
               <FileText className="w-5 h-5 text-brand-600" />
               <label className="text-base font-bold text-slate-900">
-                Assiette de calcul de la douane : Facture vs Cote Argus
+                 Assiette de calcul de la douane
               </label>
               <Tooltip
                 title="Pourquoi ce choix est déterminant ?"
-                content="Si vous avez acheté une voiture sous-cotée à l'encan (ex: 9 500 $), les douaniers locaux (GAINDE Dakar ou BADR Casa) ne taxent presque jamais sur votre facture d'achat bradée. Ils appliquent leur propre cote Argus officielle (ex: 15 000 $). Ce choix vous protège d'une mauvaise surprise de 2 000 $ à l'arrivée."
+                 content="La douane peut réévaluer un véhicule acheté sous le prix du marché. N'utilisez une autre assiette que si vous avez un document ou une référence vérifiable; sinon la simulation conserve la facture."
               />
             </div>
 
@@ -278,14 +288,29 @@ export const StepDestination: React.FC<StepDestinationProps> = ({
                 className="sr-only"
               />
               <div className="font-bold text-sm text-brand-900 flex items-center justify-between">
-                <span>2. Cote Argus douanière (Prudent)</span>
-                <span className="text-[10px] bg-amber-200 text-amber-900 px-1.5 py-0.5 rounded font-black">Conseillé Encan</span>
+                <span>2. Valeur douanière documentée</span>
+                <span className="text-[10px] bg-amber-200 text-amber-900 px-1.5 py-0.5 rounded font-black">Document requis</span>
               </div>
               <div className="text-xs text-slate-600 mt-1">
-                Évite les réévaluations surprises des inspecteurs au débarquement.
+                Utilisez uniquement une valeur reçue d’une source douanière ou professionnelle identifiable.
               </div>
             </label>
           </div>
+          {customs.valuationBasis === 'argus_official' && (
+            <div className="grid gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 sm:grid-cols-2">
+              <label className="text-xs font-bold text-slate-700">
+                Valeur documentée ($ CA)
+                <input type="number" min="1" value={customs.estimatedArgusValueCad || ''} onChange={(event) => onCustomsChange({ estimatedArgusValueCad: Number(event.target.value) || undefined })} className="mt-1 min-h-[46px] w-full rounded-xl border border-slate-300 bg-white px-3 text-sm" />
+              </label>
+              <label className="text-xs font-bold text-slate-700">
+                Source ou référence du document
+                <input type="text" value={customs.valuationReference || ''} onChange={(event) => onCustomsChange({ valuationReference: event.target.value })} placeholder="Ex. avis douanier, dossier, évaluateur" className="mt-1 min-h-[46px] w-full rounded-xl border border-slate-300 bg-white px-3 text-sm" />
+              </label>
+              {(!customs.estimatedArgusValueCad || !customs.valuationReference?.trim()) && (
+                <p className="sm:col-span-2 text-xs font-semibold text-amber-900">Information incomplète : le calcul conservera le prix facturé.</p>
+              )}
+            </div>
+          )}
         </div>
 
       </div>

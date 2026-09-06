@@ -78,7 +78,7 @@ export const ConfigEditor: React.FC<ConfigEditorProps> = ({ config, onUpdateConf
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-4">
         <div className="flex items-center space-x-2 border-b border-slate-200 pb-3 font-bold text-base text-slate-900">
           <DollarSign className="w-5 h-5 text-amber-600" />
-          <span>Taux de change officiels de référence & Spread par défaut</span>
+          <span>Taux de change indicatifs & écart appliqué</span>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -146,7 +146,7 @@ export const ConfigEditor: React.FC<ConfigEditorProps> = ({ config, onUpdateConf
 
         {/* Sénégal */}
         <div className="p-4 rounded-xl bg-emerald-50/50 border border-emerald-200 space-y-3">
-          <div className="font-bold text-sm text-emerald-950">🇸🇳 Sénégal (Port de Dakar)</div>
+          <div className="font-bold text-sm text-emerald-950">SN · Sénégal (Port de Dakar)</div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
@@ -201,7 +201,7 @@ export const ConfigEditor: React.FC<ConfigEditorProps> = ({ config, onUpdateConf
 
         {/* Maroc */}
         <div className="p-4 rounded-xl bg-orange-50/50 border border-orange-200 space-y-3">
-          <div className="font-bold text-sm text-orange-950">🇲🇦 Maroc (Casablanca / Tanger Med)</div>
+          <div className="font-bold text-sm text-orange-950">MA · Maroc (Casablanca / Tanger Med)</div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">

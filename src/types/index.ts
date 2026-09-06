@@ -68,6 +68,7 @@ export interface FinancingConfig {
 }
 
 export type TransportMode = 'roro' | 'conteneur_partage' | 'conteneur_complet';
+export type PriceStatus = 'official_tariff' | 'carrier_quote' | 'estimate' | 'quote_required';
 
 export interface TransportRoute {
   id: string;
@@ -86,6 +87,12 @@ export interface TransportRoute {
   recommended?: boolean;
   priceNote?: string;
   officialSourceUrl?: string;
+  carrierName?: string;
+  priceStatus: PriceStatus;
+  pricingSourceName: string;
+  pricingSourceUrl?: string;
+  pricingLastVerified: string;
+  pricingNote?: string;
 }
 
 export interface TransportSelection {
@@ -95,6 +102,14 @@ export interface TransportSelection {
   customOceanFreightCad?: number;
   customInlandDestinationCad?: number;
   additionalCosts?: AdditionalExportCosts;
+  quote?: {
+    routeId: string;
+    carrierName: string;
+    reference?: string;
+    quotedAt: string;
+    validUntil?: string;
+    amountCad: number;
+  };
 }
 
 export interface MoroccoCustomsOptions {
@@ -112,6 +127,7 @@ export interface CustomsSelection {
   customTaxRatePercent?: number;
   valuationBasis?: CustomsValuationBasis;
   estimatedArgusValueCad?: number;
+  valuationReference?: string;
 }
 
 export interface CostBreakdown {
@@ -210,6 +226,8 @@ export interface SimulationResult {
     optimistic: FxScenario;
   };
   marketComparison?: MarketComparison;
+  calculationStatus: 'indicative' | 'carrier_quote';
+  assumptions: string[];
 }
 
 export interface MarketDataPoint {

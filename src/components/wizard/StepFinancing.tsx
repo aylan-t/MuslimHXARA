@@ -158,7 +158,7 @@ export const StepFinancing: React.FC<StepFinancingProps> = ({
           <div className="space-y-0.5">
             <span className="font-semibold text-slate-700">Conversion appliquée :</span>
             <div className="text-sm font-bold text-slate-900">
-              1 $ CA officiel = {baseRate.toFixed(2)} {currencyCode} → Taux net obtenu : <span className="text-emerald-700">{effectiveRate.toFixed(2)} {currencyCode}</span>
+              1 $ CA indicatif = {baseRate.toFixed(2)} {currencyCode} → Taux net obtenu : <span className="text-emerald-700">{effectiveRate.toFixed(2)} {currencyCode}</span>
             </div>
           </div>
           <div className="text-right flex-shrink-0">
@@ -176,7 +176,7 @@ export const StepFinancing: React.FC<StepFinancingProps> = ({
             onClick={() => setShowAdvanced(!showAdvanced)}
             className="flex items-center space-x-2 text-xs font-bold text-slate-600 hover:text-brand-700 py-1 cursor-pointer transition-colors"
           >
-            <span>⚙ {showAdvanced ? 'Masquer' : 'Afficher'} l'ajustement manuel du spread & des frais bancaires</span>
+            <span>{showAdvanced ? 'Masquer' : 'Afficher'} l'ajustement manuel du spread et des frais bancaires</span>
             {showAdvanced ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
           </button>
 

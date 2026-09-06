@@ -1,173 +1,52 @@
-import React from 'react';
-import { Ship, Calculator, Container, History, Settings, Sparkles, RefreshCw, Layers, ShieldCheck } from 'lucide-react';
+import React, { useState } from 'react';
+import { Ship, Calculator, Container, History, Settings, Sparkles, RefreshCw, Layers, ShieldCheck, Menu, X, ChevronRight, CheckCircle2 } from 'lucide-react';
 import { GlobalReferenceConfig } from '../../types';
 
 interface HeaderProps {
   currentTab: 'wizard' | 'results' | 'cargo' | 'optimizer' | 'history' | 'config';
-  onSelectTab: (tab: 'wizard' | 'results' | 'cargo' | 'optimizer' | 'history' | 'config') => void;
+  onSelectTab: (tab: HeaderProps['currentTab']) => void;
   onLoadDemo: () => void;
   hasCurrentResult: boolean;
   config: GlobalReferenceConfig;
   onRefreshLiveRates: () => void;
   isRefreshingRates: boolean;
   onOpenSourcesModal: () => void;
+  onCollapsedChange?: (collapsed: boolean) => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({
-  currentTab,
-  onSelectTab,
-  onLoadDemo,
-  hasCurrentResult,
-  config,
-  onRefreshLiveRates,
-  isRefreshingRates,
-  onOpenSourcesModal
-}) => {
+export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, onLoadDemo, hasCurrentResult, config, onRefreshLiveRates, isRefreshingRates, onOpenSourcesModal, onCollapsedChange }) => {
+  const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const items = [
+    { id: 'wizard' as const, label: 'Nouvelle simulation', icon: Calculator },
+    ...(hasCurrentResult ? [{ id: 'results' as const, label: 'Mes résultats', icon: CheckCircle2 }] : []),
+    { id: 'cargo' as const, label: 'Cargaison', icon: Layers },
+    { id: 'optimizer' as const, label: 'Optimiseur RoRo', icon: Container },
+    { id: 'history' as const, label: 'Historique', icon: History },
+    { id: 'config' as const, label: 'Tarifs', icon: Settings },
+  ];
   return (
-    <header className="bg-brand-900 text-white shadow-lg sticky top-0 z-40">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between py-3 md:py-4 gap-3">
-
-          {/* Logo & Titre */}
-          <div className="flex items-center justify-between">
-            <div
-              onClick={() => onSelectTab('wizard')}
-              className="flex items-center space-x-3 cursor-pointer group"
-            >
-              <div className="w-11 h-11 rounded-xl bg-gradient-to-tr from-sky-500 to-emerald-400 flex items-center justify-center shadow-md group-hover:scale-105 transition-transform">
-                <Ship className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <div className="flex items-center space-x-2">
-                  <span className="text-xl font-black tracking-tight text-white">AutoTransat</span>
-                  <span className="bg-sky-500/20 text-sky-300 text-xs font-bold px-2 py-0.5 rounded border border-sky-400/30">QC</span>
-                </div>
-                <p className="text-xs text-slate-300 font-medium hidden sm:block">
-                  Calculateur de rentabilité export · Québec → Maroc & Sénégal
-                </p>
-              </div>
-            </div>
-
-            {/* Bouton Exemple Démo (Mobile) */}
-            <button
-              onClick={onLoadDemo}
-              className="md:hidden inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-white transition-colors"
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Exemple</span>
+    <>
+      <button className="fixed left-3 top-3 z-50 rounded-xl bg-[hsl(var(--navy-deep))] p-3 text-white shadow-lg md:hidden" onClick={() => setMobileOpen(true)} aria-label="Ouvrir le menu"><Menu className="h-5 w-5" /></button>
+      {mobileOpen && <button className="fixed inset-0 z-30 bg-[hsl(var(--navy-deep))]/40 md:hidden" onClick={() => setMobileOpen(false)} aria-label="Fermer le menu" />}
+      <header className={`fixed inset-y-0 left-0 z-40 bg-[hsl(var(--navy-deep))] text-white shadow-xl transition-all duration-300 ${collapsed ? 'w-[76px]' : 'w-[272px]'} ${mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
+        <div className="flex h-full flex-col px-3 py-4">
+          <div className="flex items-center justify-between px-2 pb-5">
+            <button onClick={() => onSelectTab('wizard')} className="flex items-center gap-3 text-left group" aria-label="Accueil AutoTransat QC">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[hsl(var(--teal))] shadow-lg transition-transform group-hover:scale-105"><Ship className="h-6 w-6" /></span>
+              <span className={collapsed ? 'hidden' : ''}><span className="block font-display text-lg font-bold tracking-tight">AutoTransat <em className="not-italic text-[hsl(var(--signal))]">QC</em></span><span className="block text-[11px] text-slate-400">Votre conseiller export</span></span>
             </button>
+            <button onClick={() => setMobileOpen(false)} className="rounded-lg p-2 hover:bg-white/10 md:hidden" aria-label="Fermer le menu"><X className="h-5 w-5" /></button>
           </div>
-
-          {/* Pill Taux en direct */}
-          <div className="hidden xl:flex items-center space-x-2 bg-brand-950/60 border border-sky-400/20 px-3 py-1.5 rounded-full text-xs text-slate-300">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            <span>Taux direct : 1 CAD = <strong>{config.fxRates.CAD_to_MAD} MAD</strong> · <strong>{config.fxRates.CAD_to_XOF} XOF</strong></span>
-            <button
-              onClick={onRefreshLiveRates}
-              disabled={isRefreshingRates}
-              className="ml-1 p-1 hover:text-white text-slate-400 hover:bg-white/10 rounded-full transition-colors cursor-pointer"
-              title="Actualiser les taux de change en direct"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshingRates ? 'animate-spin text-sky-400' : ''}`} />
-            </button>
-          </div>
-
-          {/* Navigation & Actions */}
-          <div className="flex items-center justify-between md:justify-end space-x-1 sm:space-x-2 overflow-x-auto pb-1 md:pb-0">
-            <nav className="flex space-x-1 text-xs sm:text-sm font-semibold">
-              <button
-                onClick={() => onSelectTab('wizard')}
-                className={`px-3 py-2 rounded-lg flex items-center space-x-1.5 transition-colors ${currentTab === 'wizard'
-                  ? 'bg-brand-800 text-white shadow-inner border border-sky-400/30'
-                  : 'text-slate-300 hover:text-white hover:bg-brand-800/60'
-                  }`}
-              >
-                <Calculator className="w-4 h-4 text-sky-400" />
-                <span>Simulation</span>
-              </button>
-
-              {hasCurrentResult && (
-                <button
-                  onClick={() => onSelectTab('results')}
-                  className={`px-3 py-2 rounded-lg flex items-center space-x-1.5 transition-colors ${currentTab === 'results'
-                    ? 'bg-brand-800 text-white shadow-inner border border-emerald-400/30'
-                    : 'text-slate-300 hover:text-white hover:bg-brand-800/60'
-                    }`}
-                >
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                  <span>Résultats</span>
-                </button>
-              )}
-
-              {/* NOUVEAU : Cargaison Conteneur */}
-              <button
-                onClick={() => onSelectTab('cargo')}
-                className={`px-3 py-2 rounded-lg flex items-center space-x-1.5 transition-colors ${currentTab === 'cargo'
-                  ? 'bg-brand-800 text-white shadow-inner border border-sky-400/30'
-                  : 'text-slate-300 hover:text-white hover:bg-brand-800/60'
-                  }`}
-              >
-                <Layers className="w-4 h-4 text-emerald-400" />
-                <span>Cargaison <span className="hidden sm:inline">Conteneur</span></span>
-              </button>
-
-              <button
-                onClick={() => onSelectTab('optimizer')}
-                className={`px-2.5 py-2 rounded-lg flex items-center space-x-1.5 transition-colors ${currentTab === 'optimizer'
-                  ? 'bg-brand-800 text-white shadow-inner border border-sky-400/30'
-                  : 'text-slate-300 hover:text-white hover:bg-brand-800/60'
-                  }`}
-              >
-                <Container className="w-4 h-4 text-amber-400" />
-                <span className="hidden lg:inline">Seuil RoRo</span>
-              </button>
-
-              <button
-                onClick={() => onSelectTab('history')}
-                className={`px-3 py-2 rounded-lg flex items-center space-x-1.5 transition-colors ${currentTab === 'history'
-                  ? 'bg-brand-800 text-white shadow-inner border border-sky-400/30'
-                  : 'text-slate-300 hover:text-white hover:bg-brand-800/60'
-                  }`}
-              >
-                <History className="w-4 h-4 text-purple-400" />
-                <span className="hidden sm:inline">Historique</span>
-              </button>
-
-              <button
-                onClick={() => onSelectTab('config')}
-                className={`px-2.5 py-2 rounded-lg flex items-center space-x-1 transition-colors ${currentTab === 'config'
-                  ? 'bg-brand-800 text-white shadow-inner border border-sky-400/30'
-                  : 'text-slate-300 hover:text-white hover:bg-brand-800/60'
-                  }`}
-                title="Tarifs et configuration de référence"
-              >
-                <Settings className="w-4 h-4 text-slate-300" />
-                <span className="hidden lg:inline">Tarifs</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={onOpenSourcesModal}
-                className="px-2.5 py-2 rounded-lg flex items-center space-x-1.5 transition-colors text-emerald-300 hover:text-white hover:bg-brand-800/60 border border-emerald-500/30 cursor-pointer"
-                title="Consulter les sources officielles et textes de loi vérifiés"
-              >
-                <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                <span className="hidden sm:inline">Sources</span>
-              </button>
-            </nav>
-
-            {/* Bouton Exemple Démo (Desktop) */}
-            <button
-              onClick={onLoadDemo}
-              className="hidden md:inline-flex items-center space-x-2 px-3.5 py-2 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-xs sm:text-sm font-bold text-white shadow transition-all transform hover:-translate-y-0.5"
-            >
-              <Sparkles className="w-4 h-4 text-amber-300" />
-              <span>Tester exemple (RAV4)</span>
-            </button>
-          </div>
-
+          <nav className="flex-1 space-y-1" aria-label="Navigation principale">
+            {items.map(({ id, label, icon: Icon }) => <button key={id} onClick={() => { onSelectTab(id); setMobileOpen(false); }} className={`flex min-h-[48px] w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold transition-colors ${currentTab === id ? 'bg-white text-[hsl(var(--navy-deep))]' : 'text-slate-300 hover:bg-white/10 hover:text-white'}`} title={collapsed ? label : undefined}><Icon className="h-5 w-5 shrink-0" /><span className={collapsed ? 'hidden' : ''}>{label}</span>{!collapsed && currentTab === id && <ChevronRight className="ml-auto h-4 w-4" />}</button>)}
+            <button onClick={onOpenSourcesModal} className="flex min-h-[48px] w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-emerald-200 hover:bg-white/10" title="Sources et fiabilité"><ShieldCheck className="h-5 w-5 shrink-0" /><span className={collapsed ? 'hidden' : ''}>Sources et fiabilité</span></button>
+          </nav>
+          <div className={`rounded-xl bg-white/10 p-3 text-xs text-slate-300 ${collapsed ? 'hidden' : ''}`}><div className="flex items-center justify-between font-semibold text-white"><span>Taux indicatifs</span><button onClick={onRefreshLiveRates} disabled={isRefreshingRates} aria-label="Actualiser les taux"><RefreshCw className={`h-4 w-4 ${isRefreshingRates ? 'animate-spin' : ''}`} /></button></div><div className="mt-2">1 CAD = {config.fxRates.CAD_to_MAD} MAD</div><div>1 CAD = {config.fxRates.CAD_to_XOF} XOF</div></div>
+          <button onClick={onLoadDemo} className={`mt-3 flex min-h-[48px] items-center justify-center gap-2 rounded-xl bg-[hsl(var(--signal))] px-3 text-sm font-bold text-[hsl(var(--navy-deep))] hover:brightness-105 ${collapsed ? 'px-0' : ''}`} title="Charger un exemple"><Sparkles className="h-4 w-4" /><span className={collapsed ? 'hidden' : ''}>Voir un exemple</span></button>
+          <button onClick={() => { const next = !collapsed; setCollapsed(next); onCollapsedChange?.(next); }} className="mt-3 hidden items-center justify-center rounded-lg p-2 text-slate-400 hover:bg-white/10 hover:text-white md:flex" aria-label={collapsed ? 'Développer le menu' : 'Réduire le menu'}><ChevronRight className={`h-5 w-5 transition-transform ${collapsed ? '' : 'rotate-180'}`} /></button>
         </div>
-      </div>
-    </header>
+      </header>
+    </>
   );
 };

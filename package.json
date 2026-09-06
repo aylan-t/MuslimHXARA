@@ -6,15 +6,17 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "tsx test_calculations.ts"
   },
   "dependencies": {
     "clsx": "^2.1.1",
-    "jspdf": "^2.5.2",
     "lucide-react": "^0.475.0",
+    "pdf-lib": "^1.17.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "tailwind-merge": "^2.6.0"
+    "tailwind-merge": "^2.6.0",
+    "tsx": "^4.23.13"
   },
   "devDependencies": {
     "@types/react": "^18.3.18",

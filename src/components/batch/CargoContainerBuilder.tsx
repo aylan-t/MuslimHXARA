@@ -171,7 +171,7 @@ export const CargoContainerBuilder: React.FC<CargoContainerBuilderProps> = ({
                   : 'text-slate-600 hover:text-slate-900'
                 }`}
             >
-              🇸🇳 Vers Dakar (Sénégal)
+              SN · Vers Dakar (Sénégal)
             </button>
             <button
               type="button"
@@ -181,7 +181,7 @@ export const CargoContainerBuilder: React.FC<CargoContainerBuilderProps> = ({
                   : 'text-slate-600 hover:text-slate-900'
                 }`}
             >
-              🇲🇦 Vers Casablanca (Maroc)
+              MA · Vers Casablanca (Maroc)
             </button>
           </div>
         </div>

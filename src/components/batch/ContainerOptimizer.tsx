@@ -46,7 +46,7 @@ export const ContainerOptimizer: React.FC<ContainerOptimizerProps> = ({
                   : 'text-slate-600 hover:text-slate-900'
                 }`}
             >
-              🇸🇳 Vers Sénégal (Dakar)
+              SN · Vers Sénégal (Dakar)
             </button>
             <button
               type="button"
@@ -56,7 +56,7 @@ export const ContainerOptimizer: React.FC<ContainerOptimizerProps> = ({
                   : 'text-slate-600 hover:text-slate-900'
                 }`}
             >
-              🇲🇦 Vers Maroc (Casablanca)
+              MA · Vers Maroc (Casablanca)
             </button>
           </div>
         </div>

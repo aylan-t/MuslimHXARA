@@ -38,6 +38,9 @@ assert(elig3.isEligible === true, "Véhicule MRE de 4 ans éligible avec abattem
 const mreOldCar = { ...DEMO_VEHICLE, year: 2018 }; // 8 ans
 const elig4 = checkEligibility(mreOldCar, 'maroc', { country: 'maroc', moroccoOptions: { isMRE: true, mreAgeOver60: true, residenceOver10Years: true, isFirstCarInLife: true } }, DEFAULT_CONFIG);
 assert(elig4.isEligible === false, "Véhicule MRE de 8 ans NON éligible (limite 5 ans)");
+const unconfirmedMreOptions = { country: 'maroc' as const, moroccoOptions: { isMRE: true, mreAgeOver60: false, residenceOver10Years: true, isFirstCarInLife: true } };
+const eligUnconfirmedMre = checkEligibility(mreRecentCar, 'maroc', unconfirmedMreOptions, DEFAULT_CONFIG);
+assert(eligUnconfirmedMre.severity === 'warning', "Une condition MRE non confirmée produit un avertissement");
 
 // TEST 4: Calcul complet Landed Cost pour DEMO_VEHICLE
 const simResult = calculateSimulation(
@@ -178,7 +181,7 @@ const simArgus = calculateSimulation(
   'senegal',
   { method: 'plateforme_transfert', fixedFeeCad: 15, variableFeePercent: 0.7, fxSpreadPercent: 1.2 },
   { routeId: 'mtl-dkr-roro', batchVehiclesCount: 1 },
-  { country: 'senegal', valuationBasis: 'argus_official', estimatedArgusValueCad: 18000 },
+  { country: 'senegal', valuationBasis: 'argus_official', estimatedArgusValueCad: 18000, valuationReference: 'Évaluation douanière TEST-001' },
   18,
   DEFAULT_CONFIG
 );
@@ -186,12 +189,100 @@ const simArgus = calculateSimulation(
 assert(simFacture.breakdown.customsTaxableValueCad < simArgus.breakdown.customsTaxableValueCad, "Assiette taxable Argus supérieure à la facture d'achat sous-évaluée");
 assert(simArgus.breakdown.customsAndTaxesCad > simFacture.breakdown.customsAndTaxesCad, "Droits de douane calculés sur la cote Argus sont plus élevés");
 
-// TEST 11: Répertoire des sources officielles certifiées
-assert(DEFAULT_CONFIG.officialSources.length >= 6, "Au moins 6 sources institutionnelles certifiées disponibles");
+const simUndocumentedValuation = calculateSimulation(
+  DEMO_VEHICLE,
+  'senegal',
+  { method: 'plateforme_transfert', fixedFeeCad: 15, variableFeePercent: 0.7, fxSpreadPercent: 1.2 },
+  { routeId: 'mtl-dkr-roro', batchVehiclesCount: 1 },
+  { country: 'senegal', valuationBasis: 'argus_official', estimatedArgusValueCad: 18000 },
+  18,
+  DEFAULT_CONFIG
+);
+assert(simUndocumentedValuation.breakdown.customsValuationBasis === 'invoice', "Une valeur sans référence documentée ne remplace pas la facture");
+
+const standardMreSimulation = calculateSimulation(
+  mreRecentCar,
+  'maroc',
+  { method: 'plateforme_transfert', fixedFeeCad: 15, variableFeePercent: 0.7, fxSpreadPercent: 1.2 },
+  { routeId: 'mtl-cas-roro', batchVehiclesCount: 1 },
+  unconfirmedMreOptions,
+  18,
+  DEFAULT_CONFIG
+);
+const confirmedMreSimulation = calculateSimulation(
+  mreRecentCar,
+  'maroc',
+  { method: 'plateforme_transfert', fixedFeeCad: 15, variableFeePercent: 0.7, fxSpreadPercent: 1.2 },
+  { routeId: 'mtl-cas-roro', batchVehiclesCount: 1 },
+  { country: 'maroc', moroccoOptions: { isMRE: true, mreAgeOver60: true, residenceOver10Years: true, isFirstCarInLife: true } },
+  18,
+  DEFAULT_CONFIG
+);
+assert(standardMreSimulation.breakdown.customsAndTaxesCad > confirmedMreSimulation.breakdown.customsAndTaxesCad, "L’abattement MRE exige toutes les conditions confirmées");
+
+// TEST 11: Répertoire des sources institutionnelles
+assert(DEFAULT_CONFIG.officialSources.length >= 6, "Au moins 6 sources institutionnelles disponibles");
 const bankOfCanada = DEFAULT_CONFIG.officialSources.find(s => s.id === 'bdc-fx');
 assert(!!bankOfCanada && bankOfCanada.url.startsWith('https://'), "Banque du Canada référencée avec URL HTTPS");
 const senegalDecree = DEFAULT_CONFIG.officialSources.find(s => s.id === 'douanes-sn');
 assert(!!senegalDecree && senegalDecree.legalReference?.includes('2025-1845'), "Décret sénégalais 2025-1845 référencé avec texte de loi");
+
+// TEST 12: Transparence des prix de transport
+assert(DEFAULT_CONFIG.routes.every(route => route.priceStatus === 'estimate'), "Les tarifs statiques de transport sont identifiés comme budgets indicatifs");
+assert(simMtlRunning.calculationStatus === 'indicative', "Une simulation sans devis est signalée comme indicative");
+const simWithCarrierQuote = calculateSimulation(
+  DEMO_VEHICLE,
+  'senegal',
+  { method: 'plateforme_transfert', fixedFeeCad: 15, variableFeePercent: 0.7, fxSpreadPercent: 1.2 },
+  {
+    routeId: 'mtl-dkr-roro',
+    batchVehiclesCount: 1,
+    quote: {
+      routeId: 'mtl-dkr-roro',
+      carrierName: 'Transporteur test',
+      reference: 'DEVIS-001',
+      quotedAt: '2026-09-01',
+      amountCad: 2750
+    }
+  },
+  { country: 'senegal' },
+  18,
+  DEFAULT_CONFIG
+);
+assert(simWithCarrierQuote.calculationStatus === 'carrier_quote', "Un devis transporteur valide change le statut du calcul");
+assert(simWithCarrierQuote.breakdown.oceanFreightCad === 2750, "Le devis transporteur remplace le budget de fret indicatif");
+
+const simWithIncompleteQuote = calculateSimulation(
+  DEMO_VEHICLE,
+  'senegal',
+  { method: 'plateforme_transfert', fixedFeeCad: 15, variableFeePercent: 0.7, fxSpreadPercent: 1.2 },
+  {
+    routeId: 'mtl-dkr-roro',
+    batchVehiclesCount: 1,
+    quote: { routeId: 'mtl-dkr-roro', carrierName: 'Transporteur test', quotedAt: '2026-09-01', amountCad: 0 }
+  },
+  { country: 'senegal' },
+  18,
+  DEFAULT_CONFIG
+);
+assert(simWithIncompleteQuote.calculationStatus === 'indicative', "Un devis incomplet ne valide jamais le calcul");
+assert(simWithIncompleteQuote.breakdown.oceanFreightCad === 2400, "Un montant de devis nul ne remplace pas le budget prudent");
+
+const simWithWrongRouteQuote = calculateSimulation(
+  DEMO_VEHICLE,
+  'senegal',
+  { method: 'plateforme_transfert', fixedFeeCad: 15, variableFeePercent: 0.7, fxSpreadPercent: 1.2 },
+  {
+    routeId: 'hal-dkr-roro',
+    batchVehiclesCount: 1,
+    quote: { routeId: 'mtl-dkr-roro', carrierName: 'Transporteur test', quotedAt: '2026-09-01', amountCad: 2750 }
+  },
+  { country: 'senegal' },
+  18,
+  DEFAULT_CONFIG
+);
+assert(simWithWrongRouteQuote.calculationStatus === 'indicative', "Un devis d’une autre route est ignoré");
+assert(simWithWrongRouteQuote.breakdown.oceanFreightCad === 1900, "Le devis d’une autre route ne remplace pas le fret sélectionné");
 
 console.log(`\nBilan des tests : ${passed} réussis, ${failed} échoués.`);
 if (failed > 0) process.exit(1);

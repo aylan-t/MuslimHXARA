@@ -112,15 +112,20 @@ def calculate_landed_cost(req: CalculationRequest):
             message = f"ÉLIGIBLE AU SÉNÉGAL : {age} an(s), conforme au décret du 24 octobre 2025."
     else:
         # Maroc
-        is_mre = req.customs.moroccoOptions.isMRE if req.customs.moroccoOptions else False
+        mre = req.customs.moroccoOptions
+        is_mre = bool(mre and mre.isMRE)
+        mre_conditions_confirmed = bool(mre and mre.mreAgeOver60 and mre.residenceOver10Years and mre.isFirstCarInLife)
         if is_mre:
             max_mre_age = DEFAULT_CONFIG["customsRules"]["morocco"]["mreMaxAgeYears"]
             if age > max_mre_age:
                 is_eligible = False
                 severity = "error"
                 message = f"NON ÉLIGIBLE RÉGIME MRE : Le régime préférentiel exige un véhicule de {max_mre_age} ans maximum (âge actuel : {age} ans)."
+            elif not mre_conditions_confirmed:
+                severity = "warning"
+                message = "RÉGIME MRE NON CONFIRMÉ : le calcul conserve le régime standard tant que toutes les conditions ne sont pas confirmées."
             else:
-                message = f"ÉLIGIBLE RÉGIME MRE : Véhicule de {age} an(s), éligible à l'abattement de 90%."
+                message = f"CONDITIONS MRE DÉCLARÉES : véhicule de {age} an(s); avantage soumis à validation documentaire."
         else:
             severity = "warning"
             message = DEFAULT_CONFIG["customsRules"]["morocco"]["legalWarning"]
@@ -160,8 +165,9 @@ def calculate_landed_cost(req: CalculationRequest):
             "customsRules"]["senegal"]["taxRatePercent"]
         customs_taxes = customs_taxable_value * (tax_rate / 100)
     else:
-        is_mre = req.customs.moroccoOptions.isMRE if req.customs.moroccoOptions else False
-        if is_mre:
+        mre = req.customs.moroccoOptions
+        can_apply_mre = bool(mre and mre.isMRE and mre.mreAgeOver60 and mre.residenceOver10Years and mre.isFirstCarInLife and age <= DEFAULT_CONFIG["customsRules"]["morocco"]["mreMaxAgeYears"])
+        if can_apply_mre:
             discount = DEFAULT_CONFIG["customsRules"]["morocco"]["mreMaxDiscountPercent"] / 100
             base_tax = (DEFAULT_CONFIG["customsRules"]["morocco"]["standardImportRatePercent"] +
                         DEFAULT_CONFIG["customsRules"]["morocco"]["vatRatePercent"]) / 100

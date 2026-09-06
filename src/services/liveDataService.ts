@@ -15,7 +15,8 @@ const FALLBACK_RATES: LiveFxResult = {
 };
 
 /**
- * Récupère les taux de change en direct depuis une API financière publique sans clé
+ * Récupère un taux de marché indicatif depuis une API publique sans clé.
+ * Ce taux n'est jamais présenté comme un cours officiel de banque centrale.
  */
 export async function fetchLiveFxRates(): Promise<LiveFxResult> {
   try {
@@ -57,11 +58,11 @@ export async function fetchLiveFxRates(): Promise<LiveFxResult> {
         CAD_to_XOF: Math.round(cadToXof * 10) / 10,
         lastUpdated: dateStr,
         isLive: true,
-        sourceName: 'ExchangeRate-API (En direct)'
+        sourceName: 'Open Exchange Rates API — taux de marché indicatif'
       };
     }
   } catch (error) {
-    console.warn('Impossible de joindre l\'API de taux en direct, utilisation du taux de repli:', error);
+    console.warn('Impossible de joindre le fournisseur de taux, utilisation d’une référence locale datée:', error);
   }
 
   return FALLBACK_RATES;

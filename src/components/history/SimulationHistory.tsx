@@ -198,7 +198,7 @@ export const SimulationHistory: React.FC<SimulationHistoryProps> = ({
                             : 'bg-orange-100 text-orange-800'
                           }`}
                       >
-                        {isSenegal ? '🇸🇳 Sénégal' : '🇲🇦 Maroc'}
+                        {isSenegal ? 'SN · Sénégal' : 'MA · Maroc'}
                       </span>
                     </div>
 

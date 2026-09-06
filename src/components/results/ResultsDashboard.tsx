@@ -18,7 +18,8 @@ import {
   Sparkles,
   Container,
   Share2,
-  ShieldCheck
+  ShieldCheck,
+  ChevronDown
 } from 'lucide-react';
 import { Tooltip } from '../common/Tooltip';
 
@@ -43,6 +44,7 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
   const isProfit = simulation.estimatedNetProfitCad > 0;
   const currencyCode = simulation.breakdown.localCurrencyCode;
   const destName = simulation.destination === 'senegal' ? 'Sénégal (Dakar)' : 'Maroc (Casablanca)';
+  const hasCarrierQuote = simulation.calculationStatus === 'carrier_quote';
 
   const handleSave = () => {
     saveSimulationToHistory(simulation);
@@ -50,10 +52,10 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
     setTimeout(() => setSavedSuccess(false), 3000);
   };
 
-  const handlePdfExport = () => {
+  const handlePdfExport = async () => {
     setIsExporting(true);
     try {
-      generateSimulationPdf(simulation);
+      await generateSimulationPdf(simulation);
     } catch (e) {
       console.error('Erreur génération PDF:', e);
     } finally {
@@ -101,6 +103,22 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
             <Download className="w-4 h-4 text-emerald-700" />
             <span>{isExporting ? 'Génération...' : 'Télécharger le PDF'}</span>
           </button>
+        </div>
+      </div>
+
+      <div className={`rounded-xl border px-4 py-3 ${hasCarrierQuote ? 'border-emerald-200 bg-emerald-50' : 'border-amber-300 bg-amber-50'}`}>
+        <div className="flex items-start gap-3">
+          {hasCarrierQuote ? <FileCheck className="mt-0.5 h-5 w-5 text-emerald-700" /> : <AlertTriangle className="mt-0.5 h-5 w-5 text-amber-700" />}
+          <div>
+            <p className="text-sm font-black text-slate-900">
+              {hasCarrierQuote ? 'Fret calculé avec votre devis transporteur' : 'Résultat indicatif — devis transporteur requis'}
+            </p>
+            <p className="mt-0.5 text-xs text-slate-600">
+              {hasCarrierQuote
+                ? 'Le montant de fret saisi est intégré. Confirmez sa période de validité et les frais inclus.'
+                : 'Le fret actuel est une hypothèse de travail. Ne prenez pas de décision d’achat avant d’obtenir un devis officiel.'}
+            </p>
+          </div>
         </div>
       </div>
 
@@ -227,10 +245,10 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
               type="button"
               onClick={onOpenSourcesModal}
               className="inline-flex items-center space-x-1.5 px-3.5 py-2 rounded-lg text-xs sm:text-sm font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 transition-colors cursor-pointer"
-              title="Consulter les 6 sources officielles et textes de loi certifiés"
+              title="Consulter les sources et leur niveau de confiance"
             >
               <ShieldCheck className="w-4 h-4 text-emerald-600" />
-              <span>Sources officielles</span>
+              <span>Sources et fiabilité</span>
             </button>
           )}
 
@@ -245,22 +263,23 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
         </div>
       </div>
 
-      {/* 3. NOUVEAU : Section 5.12 - Liens directs vers des annonces réelles */}
-      <LocalMarketLinks vehicle={simulation.vehicle} destination={simulation.destination} />
-
-      {/* 4. Comparaison Marché Local */}
-      <MarketComparison
-        comparison={simulation.marketComparison}
-        suggestedSalePriceCad={simulation.suggestedSalePriceCad}
-        suggestedSalePriceLocal={simulation.suggestedSalePriceLocal}
-        currencyCode={currencyCode}
-      />
-
-      {/* 5. Décomposition détaillée des coûts (Landed Cost) */}
-      <CostBreakdown breakdown={simulation.breakdown} financing={simulation.financing} />
-
-      {/* 6. Simulateur de sensibilité aux devises */}
-      <FxSensitivity simulation={simulation} />
+      <details className="group rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <summary className="flex min-h-[64px] cursor-pointer list-none items-center justify-between px-5 font-bold text-slate-900">
+          Voir les analyses détaillées
+          <ChevronDown className="h-5 w-5 text-slate-500 transition-transform group-open:rotate-180" />
+        </summary>
+        <div className="space-y-6 border-t border-slate-100 p-4 sm:p-6">
+          <LocalMarketLinks vehicle={simulation.vehicle} destination={simulation.destination} />
+          <MarketComparison
+            comparison={simulation.marketComparison}
+            suggestedSalePriceCad={simulation.suggestedSalePriceCad}
+            suggestedSalePriceLocal={simulation.suggestedSalePriceLocal}
+            currencyCode={currencyCode}
+          />
+          <CostBreakdown breakdown={simulation.breakdown} financing={simulation.financing} />
+          <FxSensitivity simulation={simulation} />
+        </div>
+      </details>
 
       {/* Avertissement réglementaire */}
       <div className="bg-slate-100 p-4 rounded-xl border border-slate-200 text-xs text-slate-600 space-y-2">
@@ -280,7 +299,7 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
           )}
         </div>
         <p>
-          Cette application fournit une estimation prévisionnelle d'aide à la décision. Les taxes douanières, taux de fret et taux de change réels sont indexés sur les barèmes légaux (Banque du Canada, Douanes sénégalaises décret 2025-1845, ADII Maroc BADR, Port de Montréal, Port d'Halifax, Port de Dakar) et doivent être formellement confirmés avec un transitaire agréé avant tout engagement.
+           Cette application fournit une estimation prévisionnelle d'aide à la décision. Les règles douanières sont reliées à leurs références institutionnelles. Les taux de change sont indicatifs et les frais de transport doivent être confirmés par un devis officiel du transporteur avant tout engagement.
         </p>
       </div>
 

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { TransportSelection, DestinationCountry, GlobalReferenceConfig, TransportRoute, Vehicle, AdditionalExportCosts } from '../../types';
 import { Tooltip } from '../common/Tooltip';
-import { Truck, Ship, Check, ArrowLeft, Calculator, Clock, Star, ChevronDown, ChevronUp, DollarSign, ExternalLink, ShieldCheck, Wrench, AlertCircle } from 'lucide-react';
+import { Truck, Ship, Check, ArrowLeft, Calculator, Clock, Star, ChevronDown, ChevronUp, ShieldCheck, Wrench, FileCheck2 } from 'lucide-react';
 import { QUEBEC_REGIONS, DEFAULT_CONFIG } from '../../data/defaultData';
 
 interface StepTransportProps {
@@ -32,11 +32,15 @@ export const StepTransport: React.FC<StepTransportProps> = ({
   const availableRoutes = routes.filter(r => r.destinationCountry === country);
   const selectedRoute = availableRoutes.find(r => r.id === transport?.routeId) || availableRoutes[0] || routes[0] || DEFAULT_CONFIG.routes[0];
   const isContainer = selectedRoute ? (selectedRoute.mode === 'conteneur_complet' || selectedRoute.mode === 'conteneur_partage') : false;
+  const activeQuote = transport.quote?.routeId === selectedRoute.id && transport.quote.amountCad > 0
+    ? transport.quote
+    : undefined;
 
   const batchCount = Math.max(1, transport?.batchVehiclesCount || 1);
+  const resolvedOceanFreight = activeQuote?.amountCad ?? transport.customOceanFreightCad ?? selectedRoute.oceanFreightCad;
   const oceanFreightPerCar = isContainer
-    ? Math.round((selectedRoute?.oceanFreightCad || 0) / batchCount)
-    : (selectedRoute?.oceanFreightCad || 0);
+    ? Math.round(resolvedOceanFreight / batchCount)
+    : resolvedOceanFreight;
 
   const marineInsurance = Math.round((purchasePriceCad || 0) * ((selectedRoute?.marineInsuranceRatePercent || 1.5) / 100));
   const destinationPortFees = isContainer
@@ -95,7 +99,10 @@ export const StepTransport: React.FC<StepTransportProps> = ({
     const isCont = r.mode === 'conteneur_complet' || r.mode === 'conteneur_partage';
     const isHal = r.originPort ? r.originPort.toLowerCase().includes('halifax') : false;
     const regInland = isHal ? originRegion.costToHalifaxCad : originRegion.costToMtlCad;
-    const freight = isCont ? Math.round((r.oceanFreightCad || 0) / batchCount) : (r.oceanFreightCad || 0);
+    const routeFreight = r.id === selectedRoute.id
+      ? (activeQuote?.amountCad ?? transport.customOceanFreightCad ?? r.oceanFreightCad)
+      : r.oceanFreightCad;
+    const freight = isCont ? Math.round(routeFreight / batchCount) : routeFreight;
     const destFees = isCont ? Math.round((r.portDestinationFeesCad || 0) / batchCount) : (r.portDestinationFeesCad || 0);
     const ins = Math.round((purchasePriceCad || 0) * ((r.marineInsuranceRatePercent || 1.5) / 100));
     return regInland + nonRunningTowing + (r.portOriginFeesCad || 0) + freight + ins + destFees + (r.inlandDestinationCad || 0);
@@ -137,7 +144,7 @@ export const StepTransport: React.FC<StepTransportProps> = ({
               return (
                 <div
                   key={route.id}
-                  onClick={() => onChange({ routeId: route.id })}
+                  onClick={() => onChange({ routeId: route.id, quote: route.id === transport.quote?.routeId ? transport.quote : undefined })}
                   className={`p-4 sm:p-5 rounded-2xl border-2 cursor-pointer transition-all ${isSelected
                     ? 'border-brand-600 bg-brand-50/50 shadow-md ring-2 ring-brand-500/30'
                     : 'border-slate-200 hover:border-slate-300 bg-white'
@@ -154,6 +161,9 @@ export const StepTransport: React.FC<StepTransportProps> = ({
                             <span>Recommandée</span>
                           </span>
                         )}
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${transport.quote?.amountCad && route.id === selectedRoute.id ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-900'}`}>
+                          {activeQuote && route.id === selectedRoute.id ? 'Devis transporteur saisi' : 'Budget indicatif'}
+                        </span>
                       </div>
 
                       <div className="flex items-center space-x-4 text-xs text-slate-600 mt-1.5">
@@ -166,7 +176,7 @@ export const StepTransport: React.FC<StepTransportProps> = ({
 
                       {route.priceNote && (
                         <div className="text-xs text-brand-800 font-medium mt-1">
-                          💡 {route.priceNote}
+                          Note : {route.priceNote}
                         </div>
                       )}
                     </div>
@@ -177,7 +187,7 @@ export const StepTransport: React.FC<StepTransportProps> = ({
                           {routeTotal.toLocaleString('fr-CA')} $ CA
                         </div>
                         <div className="text-[11px] text-slate-500 font-semibold">
-                          coût de transport total rendu
+                          {activeQuote && route.id === selectedRoute.id ? 'avec votre devis officiel' : 'budget à confirmer'}
                         </div>
                       </div>
                       {isSelected && (
@@ -191,6 +201,66 @@ export const StepTransport: React.FC<StepTransportProps> = ({
                 </div>
               );
             })}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border-2 border-emerald-200 bg-emerald-50/60 p-5">
+          <div className="flex items-start gap-3">
+            <FileCheck2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-700" />
+            <div className="flex-1">
+              <h3 className="font-bold text-slate-900">Avez-vous un devis officiel du transporteur?</h3>
+              <p className="mt-1 text-xs leading-relaxed text-slate-600">
+                Saisissez-le ici pour remplacer le budget indicatif de fret. Le reste des frais demeure détaillé séparément.
+              </p>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <label className="text-xs font-bold text-slate-700">
+                  Transporteur
+                  <input
+                    type="text"
+                    value={transport.quote?.routeId === selectedRoute.id ? transport.quote.carrierName : ''}
+                    onChange={(event) => onChange({ quote: { routeId: selectedRoute.id, ...transport.quote, carrierName: event.target.value, quotedAt: transport.quote?.quotedAt ?? new Date().toISOString().slice(0, 10), amountCad: transport.quote?.amountCad ?? 0 } })}
+                    placeholder="Nom indiqué sur le devis"
+                    className="mt-1 min-h-[46px] w-full rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold"
+                  />
+                </label>
+                <label className="text-xs font-bold text-slate-700">
+                  Montant du fret ($ CA)
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={transport.quote?.routeId === selectedRoute.id ? (transport.quote.amountCad || '') : ''}
+                    onChange={(event) => onChange({ quote: { routeId: selectedRoute.id, ...transport.quote, carrierName: transport.quote?.carrierName ?? '', quotedAt: transport.quote?.quotedAt ?? new Date().toISOString().slice(0, 10), amountCad: Number(event.target.value) || 0 } })}
+                    placeholder="Ex. 2450"
+                    className="mt-1 min-h-[46px] w-full rounded-xl border border-slate-300 bg-white px-3 text-sm font-bold"
+                  />
+                </label>
+                <label className="text-xs font-bold text-slate-700">
+                  Référence du devis
+                  <input
+                    type="text"
+                    value={transport.quote?.routeId === selectedRoute.id ? (transport.quote.reference ?? '') : ''}
+                    onChange={(event) => onChange({ quote: { routeId: selectedRoute.id, ...transport.quote, carrierName: transport.quote?.carrierName ?? '', quotedAt: transport.quote?.quotedAt ?? new Date().toISOString().slice(0, 10), amountCad: transport.quote?.amountCad ?? 0, reference: event.target.value } })}
+                    placeholder="Numéro ou titre du devis"
+                    className="mt-1 min-h-[46px] w-full rounded-xl border border-slate-300 bg-white px-3 text-sm"
+                  />
+                </label>
+                <label className="text-xs font-bold text-slate-700">
+                  Date du devis
+                  <input
+                    type="date"
+                    value={transport.quote?.routeId === selectedRoute.id ? transport.quote.quotedAt : ''}
+                    onChange={(event) => onChange({ quote: { routeId: selectedRoute.id, ...transport.quote, carrierName: transport.quote?.carrierName ?? '', amountCad: transport.quote?.amountCad ?? 0, quotedAt: event.target.value } })}
+                    className="mt-1 min-h-[46px] w-full rounded-xl border border-slate-300 bg-white px-3 text-sm"
+                  />
+                </label>
+              </div>
+              {!activeQuote && (
+                <p className="mt-3 rounded-lg bg-amber-100 px-3 py-2 text-xs font-semibold text-amber-950">
+                  Aucun devis saisi : le résultat sera clairement marqué comme indicatif.
+                </p>
+              )}
+            </div>
           </div>
         </div>
 
@@ -234,14 +304,14 @@ export const StepTransport: React.FC<StepTransportProps> = ({
           </div>
         )}
 
-        {/* NOUVEAU : Checklist des frais réels et imprévus terrain (Point clé de l'acheteur) */}
+        {/* Frais complémentaires à confirmer */}
         <div className="bg-slate-50 p-5 rounded-2xl border-2 border-slate-200 space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-200 pb-3">
             <div className="flex items-center space-x-2">
               <ShieldCheck className="w-5 h-5 text-emerald-700" />
               <div>
                 <span className="text-base font-bold text-slate-900">
-                  Checklist des frais réels et imprévus terrain
+                   Frais complémentaires à confirmer
                 </span>
                 <p className="text-xs text-slate-500">
                   Anticipez les frais indispensables pour que votre marge nette ne s'évapore pas
@@ -358,7 +428,7 @@ export const StepTransport: React.FC<StepTransportProps> = ({
             onClick={() => setShowTransportDetails(!showTransportDetails)}
             className="flex items-center space-x-2 text-xs font-bold text-slate-600 hover:text-brand-700 py-1 cursor-pointer transition-colors"
           >
-            <span>⚙ {showTransportDetails ? 'Masquer' : 'Afficher'} la décomposition transparente des 6 postes de transport</span>
+            <span>{showTransportDetails ? 'Masquer' : 'Afficher'} la décomposition transparente des 6 postes de transport</span>
             {showTransportDetails ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
           </button>
 

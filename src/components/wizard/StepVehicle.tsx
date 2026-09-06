@@ -4,6 +4,8 @@ import { Tooltip } from '../common/Tooltip';
 import { Car, DollarSign, Calendar, Gauge, ArrowRight, Sparkles, ChevronDown, ChevronUp, Check, MapPin, Wrench } from 'lucide-react';
 import { CURRENT_YEAR } from '../../services/calculationEngine';
 import { PRELOADED_VEHICLES, QUEBEC_REGIONS } from '../../data/defaultData';
+import { VEHICLE_CATALOG } from '../../data/vehicleCatalog';
+import { AccessibleCombobox } from '../common/AccessibleCombobox';
 
 interface StepVehicleProps {
   vehicle: Vehicle;
@@ -18,6 +20,9 @@ export const StepVehicle: React.FC<StepVehicleProps> = ({
 }) => {
   const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
   const vehicleAge = CURRENT_YEAR - vehicle.year;
+  const selectedBrand = VEHICLE_CATALOG.find(item => item.name.toLowerCase() === vehicle.brand.toLowerCase());
+  const brandOptions = VEHICLE_CATALOG.map(item => item.name);
+  const modelOptions = selectedBrand?.models.map(item => item.name) ?? [];
 
   const handleSelectPreloaded = (p: PreloadedVehicle) => {
     onChange({
@@ -73,73 +78,49 @@ export const StepVehicle: React.FC<StepVehicleProps> = ({
 
       <div className="p-6 sm:p-8 space-y-6">
 
-        {/* NOUVEAU : Liste préchargée (Autofill en 1 clic) */}
-        <div className="bg-gradient-to-r from-sky-50 to-indigo-50/70 p-4 rounded-2xl border border-sky-200 space-y-2.5">
+        <div className="rounded-2xl border border-sky-200 bg-sky-50/70 p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
               <Sparkles className="w-4 h-4 text-brand-600" />
-              <label className="text-xs font-bold text-brand-900 uppercase tracking-wider">
-                Remplissage rapide : Modèles fréquents exportés
-              </label>
+              <span className="text-sm font-bold text-brand-900">Vous voulez essayer avant de commencer?</span>
             </div>
-            <span className="text-[11px] font-semibold text-brand-700">10 modèles pré-chargés</span>
-          </div>
-
-          <div className="relative">
-            <select
-              onChange={(e) => {
-                const found = PRELOADED_VEHICLES.find(p => p.id === e.target.value);
-                if (found) handleSelectPreloaded(found);
-              }}
-              defaultValue=""
-              className="w-full text-sm font-semibold px-4 py-3 rounded-xl border border-sky-300 bg-white text-slate-900 shadow-sm focus:ring-2 focus:ring-brand-500 cursor-pointer"
+            <button
+              type="button"
+              onClick={() => handleSelectPreloaded(PRELOADED_VEHICLES[0])}
+              className="rounded-lg bg-white px-3 py-2 text-xs font-bold text-brand-800 shadow-sm ring-1 ring-sky-200 hover:bg-sky-100"
             >
-              <option value="" disabled>-- Cliquez pour choisir un véhicule et pré-remplir la simulation --</option>
-              {PRELOADED_VEHICLES.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.label} — Prix estimé : {p.purchasePriceCad.toLocaleString('fr-CA')} $ CA
-                </option>
-              ))}
-            </select>
+              Charger un exemple
+            </button>
           </div>
-
-          <p className="text-[11px] text-slate-500 italic">
-            💡 Astuce : Choisir une option pré-remplit les champs automatiquement. Vous pouvez toujours modifier les montants ensuite.
-          </p>
         </div>
 
         {/* Ligne 1 : Marque & Modèle */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-          <div>
-            <label className="block text-base font-semibold text-slate-800 mb-1.5">
-              Marque du véhicule
-              <span className="text-red-500 ml-1">*</span>
-            </label>
-            <input
-              type="text"
-              required
-              value={vehicle.brand}
-              onChange={(e) => onChange({ brand: e.target.value })}
-              placeholder="Ex : Toyota, Honda, Hyundai..."
-              className="w-full text-base px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 bg-slate-50/50 hover:bg-white transition-colors"
-            />
-          </div>
-
-          <div>
-            <label className="block text-base font-semibold text-slate-800 mb-1.5">
-              Modèle
-              <span className="text-red-500 ml-1">*</span>
-            </label>
-            <input
-              type="text"
-              required
-              value={vehicle.model}
-              onChange={(e) => onChange({ model: e.target.value })}
-              placeholder="Ex : RAV4, Corolla, CR-V, Tucson..."
-              className="w-full text-base px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 bg-slate-50/50 hover:bg-white transition-colors"
-            />
-          </div>
+          <AccessibleCombobox
+            label="Marque du véhicule"
+            value={vehicle.brand}
+            options={brandOptions}
+            placeholder="Commencez à taper, ex. Toy..."
+            required
+            onChange={(brand) => onChange({ brand, model: '' })}
+          />
+          <AccessibleCombobox
+            label="Modèle"
+            value={vehicle.model}
+            options={modelOptions}
+            placeholder={selectedBrand ? 'Commencez à taper le modèle' : 'Choisissez d’abord la marque'}
+            required
+            disabled={!vehicle.brand}
+            onChange={(model) => onChange({ model })}
+            onCommit={(model) => {
+              const match = selectedBrand?.models.find(item => item.name === model);
+              if (match) onChange({ model, category: match.category });
+            }}
+          />
         </div>
+        <p className="-mt-3 text-xs text-slate-500">
+          Utilisez les flèches du clavier puis Entrée. Si votre véhicule est absent, vous pouvez conserver une saisie manuelle.
+        </p>
 
         {/* Ligne 2 : Année & Prix d'achat CAD (Champs prioritaires) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
@@ -193,7 +174,7 @@ export const StepVehicle: React.FC<StepVehicleProps> = ({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
           <div>
             <label className="block text-base font-semibold text-slate-800 mb-1.5">
-              Catégorie / Gabarit
+               Gabarit du véhicule
             </label>
             <select
               value={vehicle.category}
@@ -272,7 +253,7 @@ export const StepVehicle: React.FC<StepVehicleProps> = ({
             onClick={() => setShowAdvancedOptions(!showAdvancedOptions)}
             className="flex items-center space-x-2 text-xs font-bold text-slate-600 hover:text-brand-700 py-1 cursor-pointer transition-colors"
           >
-            <span>⚙ {showAdvancedOptions ? 'Masquer' : 'Afficher'} les détails de provenance & frais d'encan</span>
+            <span>{showAdvancedOptions ? 'Masquer' : 'Afficher'} les détails de provenance et frais d'encan</span>
             {showAdvancedOptions ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
           </button>
 

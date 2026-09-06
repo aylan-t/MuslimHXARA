@@ -4,6 +4,7 @@ import {
   FinancingConfig,
   TransportSelection,
   CustomsSelection,
+  CustomsValuationBasis,
   GlobalReferenceConfig,
   CostBreakdown,
   SimulationResult,
@@ -12,7 +13,7 @@ import {
 } from '../types';
 import { QUEBEC_REGIONS } from '../data/defaultData';
 
-export const CURRENT_YEAR = 2026;
+export const CURRENT_YEAR = new Date().getFullYear();
 
 /**
  * Valide l'éligibilité légale du véhicule selon le pays de destination
@@ -65,10 +66,22 @@ export function checkEligibility(
         message: `NON ÉLIGIBLE AU RÉGIME MRE : L'abattement préférentiel MRE de 90% exige impérativement un véhicule de ${maxMreAge} ans maximum (année ${CURRENT_YEAR - maxMreAge} ou plus récente). Ce véhicule a ${age} an(s).`
       };
     }
+    const hasConfirmedConditions = Boolean(
+      customs.moroccoOptions?.mreAgeOver60
+      && customs.moroccoOptions?.residenceOver10Years
+      && customs.moroccoOptions?.isFirstCarInLife
+    );
+    if (!hasConfirmedConditions) {
+      return {
+        isEligible: true,
+        severity: 'warning',
+        message: `RÉGIME MRE NON CONFIRMÉ : toutes les conditions déclaratives doivent être cochées. Tant qu'elles ne le sont pas, le calcul conserve le régime douanier standard sans abattement.`
+      };
+    }
     return {
       isEligible: true,
       severity: 'success',
-      message: `ÉLIGIBLE RÉGIME MRE : Véhicule de ${age} an(s) (limite légale max : ${maxMreAge} ans). Bénéficie de l'abattement officiel de 90% sur l'assiette douanière sous réserve des conditions d'âge (60 ans+) et de séjour (10 ans+ à l'étranger).`
+      message: `CONDITIONS MRE DÉCLARÉES : véhicule de ${age} an(s) et critères déclaratifs confirmés. L'abattement est appliqué à la simulation, sous réserve de validation documentaire par la douane.`
     };
   }
 
@@ -116,9 +129,13 @@ export function calculateSimulation(
   // Si conteneur, le fret est divisé par le nombre de véhicules
   const isContainer = selectedRoute.mode === 'conteneur_complet' || selectedRoute.mode === 'conteneur_partage';
   const batchCount = Math.max(1, transport.batchVehiclesCount || 1);
+  const validCarrierQuote = transport.quote?.routeId === selectedRoute.id && transport.quote.amountCad > 0
+    ? transport.quote
+    : undefined;
+  const quotedFreightCad = validCarrierQuote?.amountCad ?? transport.customOceanFreightCad;
   const oceanFreightCad = isContainer
-    ? (transport.customOceanFreightCad ?? selectedRoute.oceanFreightCad) / batchCount
-    : (transport.customOceanFreightCad ?? selectedRoute.oceanFreightCad);
+    ? (quotedFreightCad ?? selectedRoute.oceanFreightCad) / batchCount
+    : (quotedFreightCad ?? selectedRoute.oceanFreightCad);
 
   const marineInsuranceCad = vehicle.purchasePriceCad * (selectedRoute.marineInsuranceRatePercent / 100);
   const destinationPortFeesCad = isContainer
@@ -151,8 +168,16 @@ export function calculateSimulation(
   const batteryAndRepairsCad = (addCosts.includeBatteryKeyFee ? (addCosts.batteryKeyFeeCad || 200) : 0) + (addCosts.customRepairsCad || 0);
   const totalAdditionalFeesCad = transitAgentFeeCad + roroCleaningFeeCad + portStorageBufferCad + batteryAndRepairsCad;
 
-  // 6. Douane & Taxes : Base Facture vs Base Argus officielle (GAINDE / BADR)
-  const valuationBasis = customs.valuationBasis || 'invoice';
+  // 6. Douane & Taxes : une valeur externe n'est utilisée que si elle est documentée.
+  const requestedValuationBasis = customs.valuationBasis || 'invoice';
+  const hasDocumentedValuation = Boolean(
+    customs.estimatedArgusValueCad
+    && customs.estimatedArgusValueCad > 0
+    && customs.valuationReference?.trim()
+  );
+  const valuationBasis: CustomsValuationBasis = requestedValuationBasis === 'argus_official' && hasDocumentedValuation
+    ? 'argus_official'
+    : 'invoice';
   let estimatedArgusValue = customs.estimatedArgusValueCad;
   if (!estimatedArgusValue) {
     const preloadedMatch = config.marketData.find(
@@ -173,8 +198,15 @@ export function calculateSimulation(
     customsAndTaxesCad = customsTaxableValueCad * (taxRateEffective / 100);
   } else {
     // Maroc
-    const isMRE = customs.moroccoOptions?.isMRE ?? false;
-    if (isMRE) {
+    const mre = customs.moroccoOptions;
+    const canApplyMreDiscount = Boolean(
+      mre?.isMRE
+      && mre.mreAgeOver60
+      && mre.residenceOver10Years
+      && mre.isFirstCarInLife
+      && CURRENT_YEAR - vehicle.year <= config.customsRules.morocco.mreMaxAgeYears
+    );
+    if (canApplyMreDiscount) {
       const fullTaxRate = (config.customsRules.morocco.standardImportRatePercent + config.customsRules.morocco.vatRatePercent) / 100;
       const discount = config.customsRules.morocco.mreMaxDiscountPercent / 100;
       customsAndTaxesCad = customsTaxableValueCad * fullTaxRate * (1 - discount);
@@ -249,6 +281,16 @@ export function calculateSimulation(
     effectiveRate,
     config
   );
+  const hasCarrierQuote = Boolean(validCarrierQuote);
+  const assumptions = [
+    ...(hasCarrierQuote
+      ? [`Fret basé sur le devis ${validCarrierQuote?.reference || 'fourni'} de ${validCarrierQuote?.carrierName}.`]
+      : ['Fret maritime indicatif : un devis officiel du transporteur est requis avant engagement.']),
+    ...(config.fxRates.isLive
+      ? ['Taux de change de marché indicatif, distinct du taux réellement offert par votre institution financière.']
+      : ['Taux de change local de repli : actualisation recommandée.']),
+    'Frais portuaires et terrestres à reconfirmer selon la date, le véhicule et les prestataires.',
+  ];
 
   const breakdown: CostBreakdown = {
     vehiclePurchaseCad: Math.round(vehicle.purchasePriceCad),
@@ -297,7 +339,9 @@ export function calculateSimulation(
     estimatedNetProfitLocal: Math.round(estimatedNetProfitLocal),
     estimatedRoiPercent: Math.round(estimatedRoiPercent * 10) / 10,
     fxScenarios,
-    marketComparison: marketMatch
+    marketComparison: marketMatch,
+    calculationStatus: hasCarrierQuote ? 'carrier_quote' : 'indicative',
+    assumptions
   };
 }
 

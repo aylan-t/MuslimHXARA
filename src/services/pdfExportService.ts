@@ -1,213 +1,92 @@
-import { jsPDF } from 'jspdf';
+import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { SimulationResult } from '../types';
 
-export function generateSimulationPdf(sim: SimulationResult): void {
-  const doc = new jsPDF({
-    orientation: 'portrait',
-    unit: 'mm',
-    format: 'a4'
-  });
+const CAD = (value: number) => `${value.toLocaleString('fr-CA')} $ CA`;
 
-  const primaryColor = [15, 43, 72]; // #0f2b48
-  const accentColor = sim.destination === 'senegal' ? [22, 163, 74] : [234, 88, 12];
-  const darkText = [30, 41, 59];
-  const mutedText = [100, 116, 139];
-
-  // En-tête / Bannière
-  doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-  doc.rect(0, 0, 210, 32, 'F');
-
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(18);
-  doc.setFont('helvetica', 'bold');
-  doc.text('AutoTransat QC', 15, 14);
-
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
-  doc.text('Étude de rentabilité pour l\'export de véhicule d\'occasion (Québec -> Afrique)', 15, 22);
-
-  const dateStr = new Date(sim.createdAt).toLocaleDateString('fr-CA', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  });
-  doc.text(`Émis le : ${dateStr}`, 155, 14);
-  doc.text(`Réf : ${sim.id.substring(0, 12)}`, 155, 22);
-
-  // Synthèse
-  let y = 42;
-  doc.setTextColor(darkText[0], darkText[1], darkText[2]);
-  doc.setFontSize(14);
-  doc.setFont('helvetica', 'bold');
-  doc.text('1. Synthèse du Véhicule & Destination', 15, y);
-
-  y += 8;
-  doc.setFillColor(248, 250, 252);
-  doc.setDrawColor(226, 232, 240);
-  doc.roundedRect(15, y, 180, 26, 2, 2, 'FD');
-
-  doc.setFontSize(10);
-  doc.setTextColor(darkText[0], darkText[1], darkText[2]);
-  doc.setFont('helvetica', 'bold');
-  doc.text(`Véhicule : ${sim.vehicle.brand} ${sim.vehicle.model} (${sim.vehicle.year})`, 20, y + 8);
-  doc.setFont('helvetica', 'normal');
-  doc.text(`Kilométrage : ${sim.vehicle.mileageKm.toLocaleString('fr-CA')} km`, 20, y + 15);
-  doc.text(`Prix d'achat initial : ${sim.vehicle.purchasePriceCad.toLocaleString('fr-CA')} $ CAD`, 20, y + 21);
-
-  const destCountry = sim.destination === 'senegal' ? 'Sénégal (Port de Dakar)' : 'Maroc (Casablanca / Tanger)';
-  const destDevise = sim.destination === 'senegal' ? 'Franc CFA (XOF)' : 'Dirham marocain (MAD)';
-  doc.setFont('helvetica', 'bold');
-  doc.text(`Destination : ${destCountry}`, 110, y + 8);
-  doc.setFont('helvetica', 'normal');
-  doc.text(`Devise locale : ${destDevise}`, 110, y + 15);
-  doc.text(`Statut : ${sim.isEligible ? 'Véhicule éligible' : 'Avertissement éligibilité'}`, 110, y + 21);
-
-  // Résultat Financier Clé (Bannière mise en valeur)
-  y += 34;
-  doc.setFontSize(14);
-  doc.setFont('helvetica', 'bold');
-  doc.text('2. Rentabilité Financière Estimée', 15, y);
-
-  y += 6;
-  doc.setFillColor(241, 245, 249);
-  doc.setDrawColor(accentColor[0], accentColor[1], accentColor[2]);
-  doc.setLineWidth(0.8);
-  doc.roundedRect(15, y, 180, 30, 2, 2, 'FD');
-
-  doc.setFontSize(11);
-  doc.setTextColor(mutedText[0], mutedText[1], mutedText[2]);
-  doc.text('Profit net estimé :', 22, y + 10);
-  doc.setFontSize(16);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(accentColor[0], accentColor[1], accentColor[2]);
-  doc.text(`${sim.estimatedNetProfitCad >= 0 ? '+' : ''}${sim.estimatedNetProfitCad.toLocaleString('fr-CA')} $ CAD`, 22, y + 18);
-  doc.setFontSize(9);
-  doc.text(`(${sim.estimatedNetProfitLocal.toLocaleString('fr-CA')} ${sim.breakdown.localCurrencyCode})`, 22, y + 24);
-
-  doc.setFontSize(11);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(mutedText[0], mutedText[1], mutedText[2]);
-  doc.text('Coût total rendu (Landed Cost) :', 80, y + 10);
-  doc.setFontSize(14);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(darkText[0], darkText[1], darkText[2]);
-  doc.text(`${sim.breakdown.landedCostCad.toLocaleString('fr-CA')} $ CAD`, 80, y + 18);
-  doc.setFontSize(9);
-  doc.text(`(${sim.breakdown.landedCostLocal.toLocaleString('fr-CA')} ${sim.breakdown.localCurrencyCode})`, 80, y + 24);
-
-  doc.setFontSize(11);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(mutedText[0], mutedText[1], mutedText[2]);
-  doc.text('Prix de revente suggéré :', 138, y + 10);
-  doc.setFontSize(14);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(darkText[0], darkText[1], darkText[2]);
-  doc.text(`${sim.suggestedSalePriceCad.toLocaleString('fr-CA')} $ CAD`, 138, y + 18);
-  doc.setFontSize(9);
-  doc.text(`(Marge cible : ${sim.targetMarginPercent}%)`, 138, y + 24);
-
-  // Décomposition détaillée des coûts
-  y += 38;
-  doc.setFontSize(14);
-  doc.setTextColor(darkText[0], darkText[1], darkText[2]);
-  doc.setFont('helvetica', 'bold');
-  doc.text('3. Décomposition Complète des Coûts (Landed Cost)', 15, y);
-
-  y += 6;
-  const tableData = [
-    ['Poste de coût', 'Montant CAD', '% du total', 'Détail'],
-    ['1. Prix d\'achat véhicule', `${sim.breakdown.vehiclePurchaseCad.toLocaleString('fr-CA')} $`, `${Math.round((sim.breakdown.vehiclePurchaseCad / sim.breakdown.landedCostCad) * 100)}%`, 'Prix d\'acquisition initial au Québec'],
-    ['2. Écart de change (Spread FX)', `${sim.breakdown.fxSpreadCostCad.toLocaleString('fr-CA')} $`, `${Math.round((sim.breakdown.fxSpreadCostCad / sim.breakdown.landedCostCad) * 100)}%`, `Spread bancaire appliqué (${sim.financing.fxSpreadPercent}%)`],
-    ['3. Frais de transfert d\'argent', `${sim.breakdown.bankTransferCostCad.toLocaleString('fr-CA')} $`, `${Math.round((sim.breakdown.bankTransferCostCad / sim.breakdown.landedCostCad) * 100)}%`, 'Frais fixes + commission de virement'],
-    ['4. Transport complet de A à Z', `${sim.breakdown.totalTransportCad.toLocaleString('fr-CA')} $`, `${Math.round((sim.breakdown.totalTransportCad / sim.breakdown.landedCostCad) * 100)}%`, `Fret maritime, ports départ/arrivée, convoyage & assurance`],
-    ['5. Encan & Intermédiaires', `${sim.breakdown.auctionAndBrokerFeesCad.toLocaleString('fr-CA')} $`, `${Math.round((sim.breakdown.auctionAndBrokerFeesCad / sim.breakdown.landedCostCad) * 100)}%`, 'Frais de vente aux enchères ou courtage'],
-    ['6. Douane & Taxes à destination', `${sim.breakdown.customsAndTaxesCad.toLocaleString('fr-CA')} $`, `${Math.round((sim.breakdown.customsAndTaxesCad / sim.breakdown.landedCostCad) * 100)}%`, `Droits de dédouanement (Base taxable : ${sim.breakdown.customsTaxableValueCad.toLocaleString('fr-CA')} $)`],
-    ['TOTAL COÛT RENDU (LANDED COST)', `${sim.breakdown.landedCostCad.toLocaleString('fr-CA')} $`, '100%', 'Coût d\'entrée complet rendu sur place']
-  ];
-
-  doc.setFontSize(9);
-  doc.setLineWidth(0.2);
-
-  tableData.forEach((row, idx) => {
-    const isHeader = idx === 0;
-    const isTotal = idx === tableData.length - 1;
-    const rowHeight = 7.5;
-
-    if (isHeader) {
-      doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-      doc.setTextColor(255, 255, 255);
-      doc.setFont('helvetica', 'bold');
-      doc.rect(15, y, 180, rowHeight, 'F');
-    } else if (isTotal) {
-      doc.setFillColor(241, 245, 249);
-      doc.setTextColor(darkText[0], darkText[1], darkText[2]);
-      doc.setFont('helvetica', 'bold');
-      doc.rect(15, y, 180, rowHeight, 'F');
-      doc.line(15, y, 195, y);
-    } else {
-      doc.setFillColor(idx % 2 === 0 ? 250 : 255, idx % 2 === 0 ? 250 : 255, idx % 2 === 0 ? 250 : 255);
-      doc.setTextColor(darkText[0], darkText[1], darkText[2]);
-      doc.setFont('helvetica', 'normal');
-      doc.rect(15, y, 180, rowHeight, 'F');
-      doc.line(15, y, 195, y);
-    }
-
-    doc.text(row[0], 18, y + 5);
-    doc.text(row[1], 88, y + 5);
-    doc.text(row[2], 120, y + 5);
-    doc.text(row[3], 138, y + 5);
-
-    y += rowHeight;
-  });
-
-  // Comparaison Marché
-  y += 6;
-  if (sim.marketComparison) {
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(darkText[0], darkText[1], darkText[2]);
-    doc.text(`Positionnement Marché : ${sim.marketComparison.verdictLabel}`, 15, y);
-    doc.setFontSize(8.5);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(mutedText[0], mutedText[1], mutedText[2]);
-    doc.text(
-      `Prix moyen observé sur place (${sim.marketComparison.source}) : ${sim.marketComparison.averageMarketPriceLocal.toLocaleString('fr-CA')} ${sim.breakdown.localCurrencyCode} (env. ${sim.marketComparison.averageMarketPriceCad.toLocaleString('fr-CA')} $ CAD). Écart : ${sim.marketComparison.priceDifferencePercent > 0 ? '+' : ''}${sim.marketComparison.priceDifferencePercent}%`,
-      15,
-      y + 5
-    );
-    y += 10;
-  }
-
-  // Mentions Légales & Avis
-  y += 4;
-  doc.setFillColor(254, 243, 199);
-  doc.setDrawColor(245, 158, 11);
-  doc.roundedRect(15, y, 180, 16, 1.5, 1.5, 'FD');
-
-  doc.setTextColor(146, 64, 14);
-  doc.setFontSize(7.5);
-  doc.setFont('helvetica', 'bold');
-  doc.text('AVERTISSEMENT ET CONDITIONS LÉGALES :', 18, y + 5);
-  doc.setFont('helvetica', 'normal');
-  doc.text(
-    'Ce document constitue une estimation prévisionnelle d\'aide à la décision. Les taxes douanières, taux de fret et taux de change réels',
-    18,
-    y + 9
-  );
-  doc.text(
-    'doivent être formellement validés auprès des autorités douanières et des transitaires agréés avant tout engagement d\'achat.',
-    18,
-    y + 13
-  );
-
-  // Pied de page
-  doc.setTextColor(mutedText[0], mutedText[1], mutedText[2]);
-  doc.setFontSize(8);
-  doc.text('AutoTransat QC — Outil d\'aide à la décision export automobile', 15, 290);
-  doc.text('Page 1 / 1', 185, 290);
-
-  // Sauvegarde / Téléchargement
-  const filename = `AutoTransat_${sim.vehicle.brand}_${sim.vehicle.model}_${sim.destination}.pdf`;
-  doc.save(filename);
+function download(bytes: Uint8Array, filename: string) {
+  const blob = new Blob([bytes as BlobPart], { type: 'application/pdf' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
 }
 
+export async function generateSimulationPdf(sim: SimulationResult): Promise<void> {
+  const document = await PDFDocument.create();
+  const page = document.addPage([595.28, 841.89]);
+  const regular = await document.embedFont(StandardFonts.Helvetica);
+  const bold = await document.embedFont(StandardFonts.HelveticaBold);
+  const navy = rgb(0.04, 0.16, 0.25);
+  const teal = rgb(0.02, 0.52, 0.52);
+  const amber = rgb(0.96, 0.65, 0.14);
+  const ink = rgb(0.09, 0.13, 0.2);
+  const muted = rgb(0.36, 0.42, 0.5);
+  const pale = rgb(0.95, 0.97, 0.98);
+  const margin = 44;
+
+  const text = (value: string, x: number, y: number, size = 10, font = regular, color = ink) => {
+    page.drawText(value.split('→').join('->'), { x, y, size, font, color });
+  };
+  const line = (label: string, value: string, y: number, strong = false) => {
+    text(label, margin + 12, y, 9, strong ? bold : regular, strong ? ink : muted);
+    text(value, 355, y, 9, strong ? bold : regular, ink);
+  };
+
+  page.drawRectangle({ x: 0, y: 755, width: 595.28, height: 87, color: navy });
+  text('AUTOTRANSAT QC', margin, 804, 19, bold, rgb(1, 1, 1));
+  text('Étude de rentabilité export automobile', margin, 783, 10, regular, rgb(0.78, 0.88, 0.91));
+  text(new Date(sim.createdAt).toLocaleDateString('fr-CA'), 460, 804, 9, regular, rgb(1, 1, 1));
+
+  text(`${sim.vehicle.brand} ${sim.vehicle.model} · ${sim.vehicle.year}`, margin, 720, 17, bold);
+  text(`${sim.vehicle.mileageKm.toLocaleString('fr-CA')} km · destination ${sim.destination === 'senegal' ? 'Sénégal' : 'Maroc'}`, margin, 701, 10, regular, muted);
+
+  page.drawRectangle({ x: margin, y: 612, width: 507, height: 66, color: sim.calculationStatus === 'carrier_quote' ? rgb(0.9, 0.98, 0.95) : rgb(1, 0.96, 0.84), borderColor: sim.calculationStatus === 'carrier_quote' ? teal : amber, borderWidth: 1 });
+  text(sim.calculationStatus === 'carrier_quote' ? 'FRET BASÉ SUR UN DEVIS TRANSPORTEUR' : 'RÉSULTAT INDICATIF — DEVIS TRANSPORTEUR REQUIS', margin + 14, 654, 10, bold, sim.calculationStatus === 'carrier_quote' ? teal : rgb(0.65, 0.38, 0.02));
+  text(sim.calculationStatus === 'carrier_quote'
+    ? `Transporteur : ${sim.transport.quote?.carrierName || 'non précisé'} · ${CAD(sim.breakdown.oceanFreightCad)} · devis du ${sim.transport.quote?.quotedAt || 'date non précisée'}`
+    : 'Le fret maritime est une hypothèse de travail et doit être remplacé par un devis officiel.', margin + 14, 632, 9, regular, ink);
+
+  text('SYNTHÈSE', margin, 575, 12, bold, navy);
+  const cards = [
+    ['Profit net estimé', CAD(sim.estimatedNetProfitCad)],
+    ['Coût total rendu', CAD(sim.breakdown.landedCostCad)],
+    ['Prix de revente suggéré', CAD(sim.suggestedSalePriceCad)],
+  ];
+  cards.forEach(([label, value], index) => {
+    const x = margin + index * 171;
+    page.drawRectangle({ x, y: 507, width: 158, height: 52, color: pale });
+    text(label, x + 10, 540, 8, regular, muted);
+    text(value, x + 10, 520, 13, bold, index === 0 ? teal : ink);
+  });
+
+  text('DÉCOMPOSITION DES COÛTS', margin, 470, 12, bold, navy);
+  const rows: [string, string][] = [
+    ['Prix d’achat du véhicule', CAD(sim.breakdown.vehiclePurchaseCad)],
+    ['Change et transfert', CAD(sim.breakdown.fxSpreadCostCad + sim.breakdown.bankTransferCostCad)],
+    ['Transport complet', CAD(sim.breakdown.totalTransportCad)],
+    ['Encan et intermédiaires', CAD(sim.breakdown.auctionAndBrokerFeesCad)],
+    ['Frais complémentaires', CAD(sim.breakdown.totalAdditionalFeesCad)],
+    ['Douanes et taxes', CAD(sim.breakdown.customsAndTaxesCad)],
+    ['TOTAL RENDU', CAD(sim.breakdown.landedCostCad)],
+  ];
+  rows.forEach(([label, value], index) => {
+    const y = 444 - index * 30;
+    if (index % 2 === 0) page.drawRectangle({ x: margin, y: y - 9, width: 507, height: 26, color: pale });
+    line(label, value, y, index === rows.length - 1);
+  });
+
+  text('HYPOTHÈSES À VÉRIFIER', margin, 211, 12, bold, navy);
+  sim.assumptions.slice(0, 3).forEach((assumption, index) => {
+    const clipped = assumption.length > 92 ? `${assumption.slice(0, 89)}...` : assumption;
+    text(`• ${clipped}`, margin + 4, 186 - index * 22, 8.5, regular, muted);
+  });
+
+  page.drawLine({ start: { x: margin, y: 90 }, end: { x: 551, y: 90 }, color: rgb(0.82, 0.86, 0.9), thickness: 1 });
+  text('Outil d’aide à la décision. Confirmez les tarifs, taxes et conditions avant tout engagement.', margin, 70, 8, regular, muted);
+  text(`Référence ${sim.id.slice(0, 18)}`, margin, 53, 7.5, regular, muted);
+
+  const bytes = await document.save();
+  download(bytes, `AutoTransat_${sim.vehicle.brand}_${sim.vehicle.model}_${sim.destination}.pdf`);
+}

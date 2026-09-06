@@ -40,9 +40,9 @@ class TransportSelectionInput(BaseModel):
 
 class MoroccoCustomsOptions(BaseModel):
     isMRE: bool = False
-    mreAgeOver60: bool = True
-    residenceOver10Years: bool = True
-    isFirstCarInLife: bool = True
+    mreAgeOver60: bool = False
+    residenceOver10Years: bool = False
+    isFirstCarInLife: bool = False
 
 
 class CustomsSelectionInput(BaseModel):

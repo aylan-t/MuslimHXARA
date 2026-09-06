@@ -47,6 +47,7 @@ export function App() {
   const [maxReachedStep, setMaxReachedStep] = useState<number>(1);
   const [isRefreshingRates, setIsRefreshingRates] = useState<boolean>(false);
   const [isSourcesModalOpen, setIsSourcesModalOpen] = useState<boolean>(false);
+  const [isNavigationCollapsed, setIsNavigationCollapsed] = useState(false);
 
   // Formulaire d'entrée
   const [vehicle, setVehicle] = useState<Vehicle>(INITIAL_VEHICLE);
@@ -66,9 +67,9 @@ export function App() {
     valuationBasis: 'invoice',
     moroccoOptions: {
       isMRE: false,
-      mreAgeOver60: true,
-      residenceOver10Years: true,
-      isFirstCarInLife: true
+      mreAgeOver60: false,
+      residenceOver10Years: false,
+      isFirstCarInLife: false
     }
   });
   const [targetMargin, setTargetMargin] = useState<number>(18);
@@ -218,7 +219,7 @@ export function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 flex flex-col font-sans">
+    <div className={`min-h-[100dvh] bg-[hsl(var(--paper))] flex flex-col font-sans transition-[padding] duration-300 ${isNavigationCollapsed ? 'md:pl-[76px]' : 'md:pl-[272px]'}`}>
 
       {/* Barre de navigation globale */}
       <Header
@@ -230,10 +231,11 @@ export function App() {
         onRefreshLiveRates={handleRefreshLiveRates}
         isRefreshingRates={isRefreshingRates}
         onOpenSourcesModal={() => setIsSourcesModalOpen(true)}
+        onCollapsedChange={setIsNavigationCollapsed}
       />
 
       {/* Contenu principal */}
-      <main className="flex-1 py-6 px-4 sm:px-6 lg:px-8">
+      <main className="app-enter flex-1 py-6 px-4 pt-20 sm:px-6 lg:px-10 md:pt-10">
 
         {/* VUE 1 : Formulaire Wizard linéaire */}
         {currentTab === 'wizard' && (
@@ -332,7 +334,7 @@ export function App() {
       </main>
 
       {/* Pied de page sobre */}
-      <footer className="bg-white border-t border-slate-200 py-6 text-center text-xs text-slate-500">
+      <footer className="bg-[hsl(var(--surface))] border-t border-[hsl(var(--line))] py-6 text-center text-xs text-slate-500">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
           <span>AutoTransat QC · Solution d'aide à la décision pour l'export automobile Québec → Maroc & Sénégal</span>
           <span className="text-slate-400">Règles douanières : Décret Sénégal du 24 oct. 2025 & Régime MRE Maroc</span>

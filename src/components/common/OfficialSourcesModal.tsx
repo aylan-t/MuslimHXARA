@@ -1,6 +1,6 @@
 import React from 'react';
 import { OfficialSource } from '../../types';
-import { X, ExternalLink, ShieldCheck, FileText, CheckCircle } from 'lucide-react';
+import { X, ExternalLink, ShieldCheck, FileText, AlertTriangle } from 'lucide-react';
 
 interface OfficialSourcesModalProps {
   isOpen: boolean;
@@ -27,10 +27,10 @@ export const OfficialSourcesModal: React.FC<OfficialSourcesModalProps> = ({
             </div>
             <div>
               <h2 className="text-lg font-bold text-white">
-                Répertoire des Sources Officielles & Barèmes Légaux
+                 Sources et niveau de confiance
               </h2>
               <p className="text-xs text-slate-300">
-                Données institutionnelles certifiées et liens directs vers les ministères et administrations portuaires
+                 Vérifiez les références qui encadrent chaque hypothèse du calcul
               </p>
             </div>
           </div>
@@ -46,7 +46,7 @@ export const OfficialSourcesModal: React.FC<OfficialSourcesModalProps> = ({
         {/* Corps avec la liste des sources officielles */}
         <div className="p-6 overflow-y-auto space-y-4 divide-y divide-slate-100">
           <div className="text-xs text-slate-600 bg-sky-50 border border-sky-200 p-3.5 rounded-xl leading-relaxed">
-            🔍 <strong>Garantie de transparence :</strong> Afin de garantir une fiabilité maximale à l'exportateur, tous les barèmes fiscaux, règles d'âge et taux de conversion utilisés par AutoTransat QC sont indexés sur les publications officielles ci-dessous.
+            <strong>Ce que cette liste garantit :</strong> les liens ci-dessous permettent de vérifier les règles et publications de référence. Un lien vers un port ne constitue pas un devis de fret. Les montants sans devis transporteur sont toujours présentés comme indicatifs.
           </div>
 
           <div className="pt-2 space-y-3">
@@ -96,7 +96,7 @@ export const OfficialSourcesModal: React.FC<OfficialSourcesModalProps> = ({
 
         {/* Pied */}
         <div className="bg-slate-50 p-4 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500">
-          <span>Sources vérifiées mensuellement par nos transitaires partenaires</span>
+          <span className="flex items-center gap-1.5"><AlertTriangle className="h-4 w-4 text-amber-600" /> Vérifiez les dates et obtenez un devis avant tout engagement.</span>
           <button
             onClick={onClose}
             className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg font-bold transition-colors cursor-pointer"

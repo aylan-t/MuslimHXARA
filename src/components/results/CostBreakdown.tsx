@@ -34,7 +34,7 @@ export const CostBreakdown: React.FC<CostBreakdownProps> = ({ breakdown, financi
       percent: Math.round((breakdown.fxSpreadCostCad / breakdown.landedCostCad) * 100),
       color: 'bg-amber-500',
       details: [
-        { label: 'Taux officiel de référence', value: `1 $ CA = ${breakdown.baseFxRate.toFixed(2)} ${breakdown.localCurrencyCode}` },
+        { label: 'Taux de marché indicatif', value: `1 $ CA = ${breakdown.baseFxRate.toFixed(2)} ${breakdown.localCurrencyCode}` },
         { label: 'Taux effectif appliqué', value: `1 $ CA = ${breakdown.effectiveFxRate.toFixed(2)} ${breakdown.localCurrencyCode}` },
         { label: 'Marge retenue par l\'intermédiaire', value: `${financing.fxSpreadPercent}% (${breakdown.fxSpreadCostCad.toLocaleString('fr-CA')} $ CA)` }
       ]
@@ -94,16 +94,16 @@ export const CostBreakdown: React.FC<CostBreakdownProps> = ({ breakdown, financi
     {
       id: 'customs',
       title: '7. Douane & Taxes à destination',
-      subtitle: `Droits de dédouanement (Base : ${breakdown.customsTaxableValueCad.toLocaleString('fr-CA')} $ CA - ${breakdown.customsValuationBasis === 'argus_official' ? 'Cote Argus' : 'Facture'})`,
+      subtitle: `Droits de dédouanement (Base : ${breakdown.customsTaxableValueCad.toLocaleString('fr-CA')} $ CA - ${breakdown.customsValuationBasis === 'argus_official' ? 'Valeur documentée' : 'Facture'})`,
       amountCad: breakdown.customsAndTaxesCad,
       percent: Math.round((breakdown.customsAndTaxesCad / breakdown.landedCostCad) * 100),
       color: 'bg-emerald-600',
       details: [
-        { label: 'Mode de valorisation retenu', value: breakdown.customsValuationBasis === 'argus_official' ? 'Cote Argus officielle (Prudent)' : 'Prix d\'achat facturé' },
+        { label: 'Mode de valorisation retenu', value: breakdown.customsValuationBasis === 'argus_official' ? 'Valeur douanière documentée' : 'Prix d\'achat facturé' },
         { label: 'Assiette taxable (Valeur CAF)', value: `${breakdown.customsTaxableValueCad.toLocaleString('fr-CA')} $ CA` },
         { label: 'Total droits & taxes calculés', value: `${breakdown.customsAndTaxesCad.toLocaleString('fr-CA')} $ CA` },
         { label: 'Contrevaleur en devise locale', value: `${Math.round(breakdown.customsAndTaxesCad * breakdown.effectiveFxRate).toLocaleString('fr-CA')} ${breakdown.localCurrencyCode}` },
-        ...(breakdown.customsDifferenceArgusCad > 0 ? [{ label: 'Risque réévaluation Argus vs Facture', value: `+${breakdown.customsDifferenceArgusCad.toLocaleString('fr-CA')} $ CA` }] : [])
+        ...(breakdown.customsDifferenceArgusCad > 0 ? [{ label: 'Scénario estimatif de réévaluation', value: `+${breakdown.customsDifferenceArgusCad.toLocaleString('fr-CA')} $ CA` }] : [])
       ]
     }
   ];

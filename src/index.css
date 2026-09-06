@@ -1,23 +1,46 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --ink: 204 48% 16%;
+  --ink-soft: 204 24% 38%;
+  --paper: 205 35% 96%;
+  --surface: 0 0% 100%;
+  --navy: 204 70% 23%;
+  --navy-deep: 205 76% 15%;
+  --teal: 174 56% 35%;
+  --signal: 35 86% 55%;
+  --line: 204 24% 87%;
+  --focus: 174 75% 35%;
+}
+
+* { box-sizing: border-box; }
+html { background: hsl(var(--paper)); }
 body {
   margin: 0;
-  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  color: #0f172a;
-  background-color: #f1f5f9;
+  font-family: 'DM Sans', system-ui, sans-serif;
+  color: hsl(var(--ink));
+  background: hsl(var(--paper));
   -webkit-font-smoothing: antialiased;
 }
+h1, h2, h3 { font-family: 'Space Grotesk', 'DM Sans', sans-serif; }
+button, input, select { font-family: inherit; }
+button, select { min-height: 44px; }
+button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible {
+  outline: 3px solid hsl(var(--signal));
+  outline-offset: 3px;
+}
+input[type="range"] { accent-color: hsl(var(--teal)); }
+input[type="range"]::-webkit-slider-thumb { width: 20px; height: 20px; }
 
-/* Amélioration de l'accessibilité tactile (Boutons min 44px) */
-button,
-input,
-select {
-  font-family: inherit;
+@layer utilities {
+  .font-sans { font-family: 'DM Sans', system-ui, sans-serif; }
+  .font-display { font-family: 'Space Grotesk', 'DM Sans', sans-serif; }
 }
 
-input[type="range"]::-webkit-slider-thumb {
-  width: 20px;
-  height: 20px;
+@media (prefers-reduced-motion: no-preference) {
+  .app-enter { animation: app-enter .45s ease-out both; }
 }
+@keyframes app-enter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }

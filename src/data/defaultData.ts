@@ -282,7 +282,7 @@ export const DEFAULT_CONFIG: GlobalReferenceConfig = {
       typicalSpreadPercent: 1.2,
       recommended: true,
       description: 'Taux de change réel avec spread minimal et transparence totale.',
-      advantages: 'Vous gagnez entre 250 $ et 450 $ CA par véhicule grâce au taux de change quasi-officiel (spread de 1.2% seulement).',
+      advantages: 'Un écart de change plus faible peut réduire sensiblement le coût total du transfert.',
       disadvantages: 'Nécessite la création préalable d\'un compte vérifié en ligne.'
     },
     {
@@ -345,7 +345,11 @@ export const DEFAULT_CONFIG: GlobalReferenceConfig = {
       estimatedDays: 21,
       recommended: true,
       priceNote: 'Route directe classique la plus simple depuis le Grand Montréal',
-      officialSourceUrl: 'https://www.port-montreal.com/'
+      officialSourceUrl: 'https://www.port-montreal.com/',
+      priceStatus: 'estimate',
+      pricingSourceName: 'Hypothèse de travail à confirmer par devis transporteur',
+      pricingLastVerified: '2026-03-01',
+      pricingNote: 'Les ports ne publient pas le prix maritime complet du transporteur.'
     },
     {
       id: 'hal-dkr-roro',
@@ -363,7 +367,11 @@ export const DEFAULT_CONFIG: GlobalReferenceConfig = {
       estimatedDays: 17,
       recommended: false,
       priceNote: 'Traversée maritime rapide (17j) - très avantageux pour les véhicules de l\'Est du Québec',
-      officialSourceUrl: 'https://www.portofhalifax.ca/'
+      officialSourceUrl: 'https://www.portofhalifax.ca/',
+      priceStatus: 'estimate',
+      pricingSourceName: 'Hypothèse de travail à confirmer par devis transporteur',
+      pricingLastVerified: '2026-03-01',
+      pricingNote: 'Le tarif final dépend du transporteur, du navire et du véhicule.'
     },
     {
       id: 'mtl-dkr-cont40',
@@ -381,7 +389,11 @@ export const DEFAULT_CONFIG: GlobalReferenceConfig = {
       estimatedDays: 24,
       recommended: false,
       priceNote: 'Coût partagé : très rentable dès 3 voitures (environ 1 880 $ / voiture)',
-      officialSourceUrl: 'https://www.port-montreal.com/'
+      officialSourceUrl: 'https://www.port-montreal.com/',
+      priceStatus: 'estimate',
+      pricingSourceName: 'Hypothèse de travail à confirmer par devis transporteur',
+      pricingLastVerified: '2026-03-01',
+      pricingNote: 'Le coût doit être remplacé par un devis officiel de conteneur.'
     },
     {
       id: 'mtl-casa-roro',
@@ -399,7 +411,11 @@ export const DEFAULT_CONFIG: GlobalReferenceConfig = {
       estimatedDays: 23,
       recommended: true,
       priceNote: 'Liaison directe régulière vers Casablanca',
-      officialSourceUrl: 'https://www.port-montreal.com/'
+      officialSourceUrl: 'https://www.port-montreal.com/',
+      priceStatus: 'estimate',
+      pricingSourceName: 'Hypothèse de travail à confirmer par devis transporteur',
+      pricingLastVerified: '2026-03-01',
+      pricingNote: 'Aucun tarif transporteur public vérifié n’est associé à cette route.'
     },
     {
       id: 'hal-tanger-roro',
@@ -417,7 +433,11 @@ export const DEFAULT_CONFIG: GlobalReferenceConfig = {
       estimatedDays: 16,
       recommended: false,
       priceNote: 'Traversée maritime express de 16 jours vers le hub Tanger Med',
-      officialSourceUrl: 'https://www.tangermed.ma/'
+      officialSourceUrl: 'https://www.tangermed.ma/',
+      priceStatus: 'estimate',
+      pricingSourceName: 'Hypothèse de travail à confirmer par devis transporteur',
+      pricingLastVerified: '2026-03-01',
+      pricingNote: 'Tanger Med est une source portuaire, pas un devis de fret.'
     },
     {
       id: 'mtl-casa-cont40',
@@ -435,7 +455,11 @@ export const DEFAULT_CONFIG: GlobalReferenceConfig = {
       estimatedDays: 26,
       recommended: false,
       priceNote: 'Idéal pour envoi groupé de 3 à 4 véhicules sécurisés',
-      officialSourceUrl: 'https://www.port-montreal.com/'
+      officialSourceUrl: 'https://www.port-montreal.com/',
+      priceStatus: 'estimate',
+      pricingSourceName: 'Hypothèse de travail à confirmer par devis transporteur',
+      pricingLastVerified: '2026-03-01',
+      pricingNote: 'Le coût doit être remplacé par un devis officiel de conteneur.'
     }
   ],
   marketData: [
