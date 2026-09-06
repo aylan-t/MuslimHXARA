@@ -1,8 +1,8 @@
 fastapi>=0.110.0
 uvicorn>=0.28.0
 pydantic>=2.6.0
-google-generativeai>=0.8
 python-multipart
 python-dotenv>=1.0.0
-google-auth>=2.15.0
+# Voice parse (Groq STT+LLM) uses the OpenAI-compatible REST API via stdlib
+# urllib — no extra SDK required. TTS is local (browser Web Speech API).
 

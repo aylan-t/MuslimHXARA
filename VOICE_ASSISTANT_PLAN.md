@@ -1,5 +1,8 @@
 # Voice Assistant Bubble — Plan (Senior English Mode)
 
+> MIGRATED 2026-09-06 (post-build): parse-audio now Groq (`whisper-large-v3-turbo` STT → `openai/gpt-oss-120b` LLM, `GROQ_API_KEY`); TTS is browser Web Speech API (English voice, free) — `POST /api/voice/speak`, `GEMINI_API_KEY`, `google-generativeai`/`google-auth` and voice `Kore` are REMOVED. Sections below describing Gemini are archive.
+
+
 Source: grill interview 2026-09-06. Step-0 done: `.gitignore` (+`.env`), `.env` placeholder, `.env.example`. No voice code yet.
 
 ## 1. Locked decisions
@@ -58,10 +61,10 @@ Source: grill interview 2026-09-06. Step-0 done: `.gitignore` (+`.env`), `.env` 
 ### Backend (FastAPI)
 
 - `POST /api/voice/parse-audio` (multipart: `audio`, `current_step: int`, `known_json: str`):
-  Calls Gemini `gemini-2.0-flash` audio-in. Returns `{ updates, confidence, transcript, missing_for_current_step, next_prompt, future_hits }`. No audio persisted (volatile transcribe then drop).
-- `POST /api/voice/speak` (`{ text, voice="Kore", pace="slow" }`):
-  Calls Gemini `gemini-2.5-flash-tts` → MP3 bytes (or base64). Short senior-friendly sentences only.
-- Deps add: `google-generativeai>=0.8`, `python-multipart`. Env `GEMINI_API_KEY` (never committed).
+  ~~Calls Gemini `gemini-2.0-flash` audio-in.~~ Now Groq: `whisper-large-v3-turbo` STT → `openai/gpt-oss-120b` LLM. Returns `{ updates, confidence, transcript, missing_for_current_step, next_prompt, future_hits }`. No audio persisted (volatile transcribe then drop).
+- ~~`POST /api/voice/speak` (`{ text, voice="Kore", pace="slow" }`):
+  Calls Gemini `gemini-2.5-flash-tts` → MP3 bytes (or base64). Short senior-friendly sentences only.~~ ARCHIVE 2026-09-06 — route removed; TTS is browser Web Speech API (English, free).
+- Deps: ~~`google-generativeai>=0.8`,~~ `python-multipart`. Env ~~`GEMINI_API_KEY`~~ `GROQ_API_KEY` (never committed).
 
 ### Gemini prompts (draft for build)
 

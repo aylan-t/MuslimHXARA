@@ -49,6 +49,9 @@ class CustomsSelectionInput(BaseModel):
     country: DestinationCountry = 'senegal'
     moroccoOptions: Optional[MoroccoCustomsOptions] = None
     customTaxRatePercent: Optional[float] = None
+    # Mirrors the frontend valuation choice (invoice|argus_official) so the
+    # voice assistant can persist it instead of dropping it silently.
+    valuationBasis: Optional[str] = None
 
 
 class CalculationRequest(BaseModel):
@@ -96,10 +99,6 @@ class CalculationResponse(BaseModel):
     estimatedRoiPercent: float
 
 
-class VoiceKnownState(BaseModel):
-    confirmed: List[str] = []
-
-
 class VoiceParseResponse(BaseModel):
     updates: Dict[str, Any] = {}
     confidence: float = 0.0
@@ -109,7 +108,13 @@ class VoiceParseResponse(BaseModel):
     future_hits: List[str] = []
 
 
-class VoiceSpeakRequest(BaseModel):
-    text: str
-    voice: str = "Kore"
-    pace: str = "slow"
+class VoiceClientEvent(BaseModel):
+    """Frontend voice decision event, appended to logs/voice-debug.txt as-is.
+
+    Lets the debug file show WHY a heard chunk did not fill fields
+    (low-confidence skip, frozen field, brand mismatch...), which the
+    backend alone cannot see.
+    """
+
+    kind: str = "event"
+    detail: str = ""

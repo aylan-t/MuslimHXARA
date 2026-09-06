@@ -1,5 +1,8 @@
 # Voice Assistant — Checklist (6 subagents, equitable split)
 
+> MIGRATED 2026-09-06 (post-build): parse-audio now Groq STT+LLM (`GROQ_API_KEY`); TTS is browser Web Speech API — `POST /api/voice/speak`, Gemini (`gemini-2.0-flash`, `gemini-2.5-flash-tts`, voice Kore, `GEMINI_API_KEY`, `google-generativeai`/`google-auth`) REMOVED. Checked items below referencing Gemini are archive.
+
+
 Plan ref: `VOICE_ASSISTANT_PLAN.md`. Codebase anchors: `src/App.tsx`, `src/components/wizard/StepVehicle.tsx`, `src/types/index.ts`, `backend/main.py`.
 
 > Dispatch rule: 6 parallel agents, no shared files except the contract below. Each agent owns its files + verifies with its own command. No coding started yet — this is the work breakdown.
@@ -23,6 +26,8 @@ Plan ref: `VOICE_ASSISTANT_PLAN.md`. Codebase anchors: `src/App.tsx`, `src/compo
 
 ## Agent 2 — Backend: speak route + config (owner: `backend/requirements.txt`, `backend/main.py`, `.gitignore`, env docs)
 
+> ARCHIVE 2026-09-06 — Gemini TTS removed: no `POST /api/voice/speak`, no `google-generativeai`/`google-auth`, no `GEMINI_API_KEY`, no voice Kore. TTS is browser Web Speech API (free, `speakLocal` in `voiceService.ts`). Items below describe the original build, kept for history.
+
 - [x] **Step-0 safety: add `.env` (and `.env.*` except `.env.example`) to `.gitignore` BEFORE creating any `.env` with the key.**
 - [x] Add `google-generativeai>=0.8`, `python-multipart` to `backend/requirements.txt`.
 - [x] Add `POST /api/voice/speak` → Gemini `gemini-2.5-flash-tts` (voice Kore, slow, short sentences) → `audio/mpeg`.
@@ -38,7 +43,7 @@ Plan ref: `VOICE_ASSISTANT_PLAN.md`. Codebase anchors: `src/App.tsx`, `src/compo
 - [x] Upload queue (max 1 in flight), payload `{ audio, currentStep, known }` where `known` includes `confirmed: string[]`, 8s timeout + abort.
 - [x] Auto-stop on `visibilitychange` hidden + 5-min global timeout; expose `start/stop/isRecording/onChunk/onError`.
 - [x] Pre-check secure context (`window.isSecureContext`): if false, emit dedicated error "Microphone needs HTTPS or localhost" instead of failing silently.
-- [x] Never store audio beyond upload; expose TTS `playMp3(bytes)` helper.
+- [x] Never store audio beyond upload; ~~expose TTS `playMp3(bytes)` helper~~ ARCHIVE — backend TTS removed; speech is local via `speakLocal()` (Web Speech API).
 - [x] Verify: `npx tsc --noEmit` + manual Chrome mic test with mocked endpoint.
 
 ## Agent 4 — Frontend: bubble UI + states (owner: `src/components/voice/VoiceAssistantBubble.tsx` only)

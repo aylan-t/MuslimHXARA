@@ -36,8 +36,8 @@ const VOICE_ASSISTANT_ENABLED: boolean =
 import {
   createVoiceLoop,
   ensureSecureContext,
-  getApiBase,
-  playMp3,
+  logVoiceEvent,
+  speakLocal,
   stopPlayback
 } from './services/voiceService';
 import type {
@@ -96,6 +96,25 @@ function flattenVoiceUpdatePaths(updates: Record<string, unknown>): string[] {
     }
   }
   return paths;
+}
+
+/** Dotted voice field path -> human words (freeze prompts must never show codes). */
+const VOICE_TARGET_LABELS: Record<string, string> = {
+  'vehicle.brand': 'the brand',
+  'vehicle.model': 'the model',
+  'vehicle.year': 'the vehicle year',
+  'vehicle.purchasePriceCad': 'the purchase price',
+  'vehicle.mileageKm': 'the mileage',
+  'vehicle.category': 'the vehicle type',
+  destination: 'the destination',
+  'transport.routeId': 'the transport route',
+  'transport.batchVehiclesCount': 'the number of vehicles',
+  'customs.country': 'the customs country',
+  'customs.valuationBasis': 'the customs value',
+};
+
+function voiceTargetLabel(target: string): string {
+  return VOICE_TARGET_LABELS[target] ?? target;
 }
 
 // Inline recap gate card (Agent 5 owns it here — no new files).
@@ -196,6 +215,7 @@ export function App() {
   const currentStepRef = useRef<number>(currentStep);
   const confirmedRef = useRef<string[]>([]);
   const voiceOnRef = useRef<boolean>(false);
+  const lastSpokenRef = useRef<string>('');
   const recapRef = useRef<VoiceRecapState | null>(null);
   const vehicleRef = useRef<Vehicle>(vehicle);
   const destinationRef = useRef<DestinationCountry>(destination);
@@ -214,28 +234,29 @@ export function App() {
   useEffect(() => { configRef.current = config; }, [config]);
   useEffect(() => { recapRef.current = recap; }, [recap]);
 
-  // Speak a prompt via the backend TTS endpoint (best-effort, text stays on screen).
+  // Speak a prompt with the browser's free local synthesis (Web Speech API,
+  // English voice). Capture is suspended while speaking so the mic never
+  // re-ingests our own prompts (TTS echo). Best-effort: text stays on screen.
+  // Anti-nag: a prompt identical to the last one spoken is shown but NOT
+  // re-spoken — otherwise the assistant interrupts the user in a loop
+  // (silence chunk -> "I didn't catch that" -> suspend -> silence chunk...).
   const speakText = useCallback(async (text: string): Promise<void> => {
     const short = text.slice(0, 280).trim();
     if (short === '') return;
+    if (short === lastSpokenRef.current) return;
+    lastSpokenRef.current = short;
     setVoiceState('speaking');
+    voiceLoopRef.current?.suspendCapture();
     try {
-      const res = await fetch(`${getApiBase()}/api/voice/speak`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: short, voice: 'Kore', pace: 'slow' })
-      });
-      if (!res.ok) throw new Error(`speak failed: ${res.status}`);
-      const buf = await res.arrayBuffer();
-      await playMp3(buf);
-    } catch {
-      // TTS failure never blocks the form: the prompt text stays visible.
+      await speakLocal(short);
     } finally {
+      voiceLoopRef.current?.resumeCapture();
       setVoiceState(voiceOnRef.current ? 'listening' : 'idle');
     }
   }, []);
 
   const handleVoiceError = useCallback((err: VoiceLoopError): void => {
+    logVoiceEvent('error', `kind=${err.kind} retryable=${err.retryable} msg=${err.message.slice(0, 200)}`);
     if (err.kind === 'insecure-context') {
       setVoiceError(err.message);
       setVoiceState('error');
@@ -250,7 +271,7 @@ export function App() {
       return;
     }
     if (err.kind === 'server' && err.retryable === false) {
-      // Fatal server-side config (e.g. missing GEMINI_API_KEY): stop the loop
+      // Fatal server-side config (e.g. missing GROQ_API_KEY): stop the loop
       // instead of re-uploading every chunk, and show exactly what to do.
       voiceLoopRef.current?.stop();
       stopPlayback();
@@ -265,6 +286,13 @@ export function App() {
   }, []);
 
   const handleVoiceChunk = useCallback((result: VoiceParseResult): void => {
+    // Late chunk landing after the loop stopped (trailing flush): ignore it,
+    // the UI already went idle.
+    if (!voiceOnRef.current) {
+      return;
+    }
+    // A 200 means the backend is reachable again: clear any offline badge.
+    setOfflineMode(false);
     // Recap voice commands: "correct" continues, "change" goes back to step 1.
     const transcript = (result.transcript ?? '').toLowerCase();
     if (recapRef.current !== null) {
@@ -289,22 +317,46 @@ export function App() {
     }
 
     const updates: Record<string, unknown> = isVoiceRecord(result.updates) ? result.updates : {};
+    logVoiceEvent(
+      'chunk',
+      `conf=${result.confidence} updates=[${Object.keys(updates).join(',')}] missing=[${missing.join(',')}] transcript=${(result.transcript ?? '').slice(0, 150)}`
+    );
 
     // Low-confidence gate: 2 strikes on the same field freezes voice for it.
     if (result.confidence < 0.7) {
+      const updatesEmpty = Object.keys(updates).length === 0;
+      if (updatesEmpty && missing.length === 0) {
+        // Heard nothing (silence/noise guard from the backend): show the
+        // retry prompt but don't burn a strike on a pseudo-field.
+        if (result.next_prompt) {
+          setNextPrompt(result.next_prompt);
+        }
+        logVoiceEvent('skip-noise', `transcript=${(result.transcript ?? '').slice(0, 150)}`);
+        return; // skip applying
+      }
       const paths = flattenVoiceUpdatePaths(updates);
       const target = missing[0] ?? paths[0] ?? 'general';
       if (!frozenRef.current.includes(target)) {
         const next = (strikesRef.current[target] ?? 0) + 1;
         strikesRef.current = { ...strikesRef.current, [target]: next };
         setLowConfStrikes(strikesRef.current);
+        let prompt: string | undefined;
         if (next >= 2) {
           frozenRef.current = [...frozenRef.current, target];
           setFrozenFields(frozenRef.current);
-          setNextPrompt(`Tap to type ${target} — I had trouble hearing it.`);
+          prompt = `Tap to type ${voiceTargetLabel(target)} — I had trouble hearing it.`;
+          setNextPrompt(prompt);
         } else if (result.next_prompt) {
-          setNextPrompt(result.next_prompt);
+          prompt = result.next_prompt;
+          setNextPrompt(prompt);
         }
+        // Re-prompts are spoken like confident ones so the user hears them.
+        if (prompt !== undefined) {
+          void speakText(prompt);
+        }
+        logVoiceEvent('low-conf', `target=${target} strikes=${next} frozen=${next >= 2} conf=${result.confidence}`);
+      } else {
+        logVoiceEvent('low-conf-frozen-skip', `target=${target} conf=${result.confidence}`);
       }
       return; // skip applying
     }
@@ -491,6 +543,11 @@ export function App() {
       setConfirmedFields(confirmedRef.current);
       setVoiceFilledFields((prev) => Array.from(new Set([...prev, ...fresh])));
     }
+    // Diagnose "heard but not filled": anything the backend sent but we dropped
+    // (frozen field, unknown brand/model, out-of-range int...).
+    const heardPaths = flattenVoiceUpdatePaths(updates);
+    const dropped = heardPaths.filter((p) => !applied.includes(p));
+    logVoiceEvent('applied', `applied=[${applied.join(',')}] dropped=[${dropped.join(',')}] conf=${result.confidence}`);
     if (result.next_prompt) {
       setNextPrompt(result.next_prompt);
       void speakText(result.next_prompt);
@@ -511,6 +568,7 @@ export function App() {
     }
     setVoiceError(null);
     setOfflineMode(false);
+    lastSpokenRef.current = '';
     try {
       ensureSecureContext();
     } catch (err) {
@@ -521,7 +579,29 @@ export function App() {
     if (voiceLoopRef.current === null) {
       voiceLoopRef.current = createVoiceLoop({
         onChunk: handleVoiceChunk,
-        onError: handleVoiceError
+        onError: handleVoiceError,
+        onUploadState: (uploading: boolean): void => {
+          if (!voiceOnRef.current) {
+            return;
+          }
+          // 'thinking' while a chunk is being understood, back to 'listening'
+          // when done — never yank the state out of 'speaking'/'error'.
+          setVoiceState((prev) => {
+            if (uploading) {
+              return prev === 'listening' ? 'thinking' : prev;
+            }
+            return prev === 'thinking' ? 'listening' : prev;
+          });
+        },
+        // Covers tab-hide, global timeout and any other loop-side stop: the
+        // UI must reflect it (mic released, speech cut, back to idle).
+        onStopped: (): void => {
+          stopPlayback();
+          voiceOnRef.current = false;
+          setVoiceOn(false);
+          setVoiceState('idle');
+          setOfflineMode(false);
+        }
       });
     }
     const loop = voiceLoopRef.current;
@@ -665,7 +745,7 @@ export function App() {
       `${v.brand} ${v.model} ${v.year}`.trim(),
       `${v.mileageKm.toLocaleString('en-US')} km, $${v.purchasePriceCad.toLocaleString('en-US')}`,
       `Destination: ${d === 'senegal' ? 'Senegal' : 'Morocco'}`,
-      `Transport route: ${t.routeId} (${t.batchVehiclesCount} vehicle${t.batchVehiclesCount > 1 ? 's' : ''})`
+      `Transport route: ${configRef.current.routes.find((r) => r.id === t.routeId)?.name ?? t.routeId} (${t.batchVehiclesCount} vehicle${t.batchVehiclesCount > 1 ? 's' : ''})`
     ];
     const snapshot = JSON.stringify({
       vehicle: v,

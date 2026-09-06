@@ -111,7 +111,7 @@ npm run dev
 
 (`dev:web` / `dev:api` run each server alone. Replit uses `dev:web`.)
 
-.env setup: copy `.env.example` → `.env` and fill `GEMINI_API_KEY` (get a key at https://aistudio.google.com/apikey). Never commit `.env` — it is covered by `.gitignore`; only `.env.example` is committed.
+.env setup: copy `.env.example` → `.env` and fill `GROQ_API_KEY` (get a key at https://console.groq.com/keys). Voice playback needs no key (browser Web Speech API). Never commit `.env` — it is covered by `.gitignore`; only `.env.example` is committed.
 
 Demo hosting note: the backend must run alongside the frontend — use a second Replit workflow or a separate host for the API.
 

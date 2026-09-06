@@ -6,7 +6,11 @@ data/*.db
 data/*.db-*
 screenshots/
 
-# Env secrets (voice assistant: GEMINI_API_KEY) — never commit
+# Env secrets (voice assistant: GROQ_API_KEY) — never commit
 .env
 .env.*
 !.env.example
+
+# Voice debug log (logs/voice-debug.txt) — local troubleshooting file, append-only.
+# The app never clears it: delete its content (or the file) manually to empty it.
+logs/voice-debug.txt

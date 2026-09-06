@@ -2,7 +2,6 @@ import os
 import time
 import json
 import math
-import base64
 import logging
 import urllib.request
 import urllib.error
@@ -14,41 +13,59 @@ from fastapi import FastAPI, HTTPException, File, Form, UploadFile
 from fastapi.responses import JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
-from backend.schemas import CalculationRequest, CalculationResponse, CostBreakdownResponse, VoiceParseResponse, VoiceSpeakRequest
+from backend.schemas import CalculationRequest, CalculationResponse, CostBreakdownResponse, VoiceParseResponse, VoiceClientEvent
 from backend.freight.routes import router as freight_router
-load_dotenv()  # populate os.environ from repo-root .env (uvicorn/concurrently do not do this)
+
+from pathlib import Path
+
+_BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(_BASE_DIR / ".env")  # explicit path: works whatever the uvicorn cwd is
+load_dotenv()  # fallback: also honour cwd .env / actual environment
+
+
+def _clean_api_key(raw: str) -> str:
+    """Strip whitespace AND surrounding quotes (.env pitfalls: KEY="...")."""
+    key = (raw or "").strip()
+    if len(key) >= 2 and key[0] == key[-1] and key[0] in ("'", '"'):
+        key = key[1:-1].strip()
+    return key
+
+
+def _key_hint(key: str) -> str:
+    """Startup presence hint. Never leaks key material (no length, no prefix)."""
+    return "configured" if key else "MISSING"
+
 
 voice_log = logging.getLogger("voice")
 voice_log.info(
-    "voice: GEMINI_API_KEY %s (set it in .env, then restart the server)",
-    "configured" if os.environ.get("GEMINI_API_KEY", "").strip() else "MISSING",
+    "voice: GROQ_API_KEY (parse) %s (get one at https://console.groq.com/keys, set it in .env, then restart)",
+    _key_hint(_clean_api_key(os.environ.get("GROQ_API_KEY", ""))),
+)
+voice_log.info(
+    "voice: TTS is local (Web Speech API in the browser) — no TTS key needed",
 )
 
 
-def _resolve_gemini_auth():
-    """Return (extra_headers, mode) for Gemini calls.
+VOICE_DEBUG_LOG = _BASE_DIR / "logs" / "voice-debug.txt"
 
-    Prefers a legacy AIza API key; falls back to gcloud ADC OAuth, which
-    covers accounts that can only mint new AQ. keys (rejected as ?key=).
-    Raises RuntimeError with a human-readable cause when neither works.
+
+def _voice_debug(msg: str) -> None:
+    """Append one line to logs/voice-debug.txt for voice troubleshooting.
+
+    Append-only by design: the app NEVER truncates, rotates or deletes this
+    file — the user clears it manually (open it, select all, delete, save,
+    or delete the file; it is recreated on the next voice event).
+    Logging must never break a request: every failure is swallowed.
+    Never pass key material here.
     """
-    key = os.environ.get("GEMINI_API_KEY", "").strip()
-    if key.startswith("AIza"):
-        return ({"x-goog-api-key": key}, "api-key")
     try:
-        import google.auth
-        from google.auth.transport import requests as google_requests
-    except ImportError:
-        raise RuntimeError("no AIza key and google-auth is missing (run: pip install -r backend/requirements.txt)")
-    try:
-        creds, _ = google.auth.default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
-        creds.refresh(google_requests.Request())
-    except Exception as e:
-        raise RuntimeError(
-            "no usable auth: set a legacy AIza GEMINI_API_KEY in .env or run "
-            "'gcloud auth application-default login' (%s)" % type(e).__name__
-        )
-    return ({"Authorization": "Bearer " + creds.token}, "oauth-adc")
+        VOICE_DEBUG_LOG.parent.mkdir(parents=True, exist_ok=True)
+        stamp = time.strftime("%Y-%m-%d %H:%M:%S")
+        with open(VOICE_DEBUG_LOG, "a", encoding="utf-8") as f:
+            f.write(f"{stamp} {msg}\n")
+    except Exception:
+        pass
+
 
 CURRENT_YEAR = 2026
 FX_API_URL = "https://open.er-api.com/v6/latest/CAD"
@@ -351,14 +368,163 @@ VOICE_CATALOG_BRANDS = [
     "Nissan", "Subaru", "Tesla", "Toyota", "Volkswagen", "Volvo",
 ]
 VOICE_MAX_AUDIO_BYTES = 2 * 1024 * 1024
-VOICE_GEMINI_TIMEOUT_S = 25
+
+# ---- Groq voice parse (STT + LLM). TTS is local (browser Web Speech API). ----
+# No SDK needed: Groq exposes an OpenAI-compatible REST API, called here
+# with stdlib urllib so no extra dependency is required at runtime.
+GROQ_STT_URL = "https://api.groq.com/openai/v1/audio/transcriptions"
+GROQ_CHAT_URL = "https://api.groq.com/openai/v1/chat/completions"
+# Cloudflare in front of api.groq.com rejects stdlib's default
+# "Python-urllib/..." UA (HTTP 403 error 1010) — identify properly.
+GROQ_USER_AGENT = "AutoTransatQC-voice/1.0 (Python-urllib)"
+GROQ_STT_MODEL = "whisper-large-v3-turbo"
+GROQ_LLM_MODEL = "openai/gpt-oss-120b"
+GROQ_LLM_FALLBACK_MODEL = "openai/gpt-oss-20b"
+VOICE_GROQ_STT_TIMEOUT_S = 10
+VOICE_GROQ_LLM_TIMEOUT_S = 12
+# Whisper hallucinates these on near-silent chunks; treat as "heard nothing".
+VOICE_STT_NOISE_PHRASES = frozenset({
+    "thank you", "thanks for watching", "subtitles by", "thank you for watching",
+    "music", "bye", "hello", "oh", "ah",
+})
 
 
-def _call_gemini_audio_parse(auth_headers, audio_bytes: bytes, mime_type: str, current_step: int, known_json: str) -> Dict[str, Any]:
+def _resolve_groq_auth():
+    """Return (extra_headers, mode) for Groq STT+LLM calls.
+
+    Reads GROQ_API_KEY (console.groq.com/keys, starts with gsk_).
+    Raises RuntimeError with a human-readable cause when missing.
+    """
+    key = _clean_api_key(os.environ.get("GROQ_API_KEY", ""))
+    if key:
+        return ({"Authorization": "Bearer " + key}, "groq-api-key")
+    raise RuntimeError(
+        "no usable auth: set GROQ_API_KEY (from https://console.groq.com/keys "
+        "in the repo-root .env, no quotes, then restart uvicorn)"
+    )
+
+
+def _encode_multipart(fields: Dict[str, str], filename: str, file_bytes: bytes, file_mime: str):
+    """Build a multipart/form-data body with stdlib only. Returns (body, content_type)."""
+    boundary = "----voice%d" % int(time.time() * 1000)
+    buf = bytearray()
+    for name, value in fields.items():
+        buf += ("--%s\r\nContent-Disposition: form-data; name=\"%s\"\r\n\r\n%s\r\n" % (boundary, name, value)).encode("utf-8")
+    buf += (
+        "--%s\r\nContent-Disposition: form-data; name=\"file\"; filename=\"%s\"\r\nContent-Type: %s\r\n\r\n"
+        % (boundary, filename, file_mime)
+    ).encode("utf-8")
+    buf += file_bytes
+    buf += ("\r\n--%s--\r\n" % boundary).encode("utf-8")
+    return (bytes(buf), "multipart/form-data; boundary=%s" % boundary)
+
+
+def _groq_post_json(url: str, auth_headers, payload: Dict[str, Any], timeout_s: int, label: str) -> Dict[str, Any]:
+    body = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        url, data=body,
+        headers={"Content-Type": "application/json", "User-Agent": GROQ_USER_AGENT, **auth_headers},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout_s) as resp:
+            return json.loads(resp.read().decode("utf-8", errors="replace"))
+    except urllib.error.HTTPError as e:
+        try:
+            detail = e.read().decode("utf-8", errors="replace")[:300]
+        except Exception:
+            detail = ""
+        raise RuntimeError(f"Groq {label} HTTP {e.code} {detail.strip()}"[:320])
+    except urllib.error.URLError as e:
+        raise RuntimeError(f"Groq {label} network error: {type(e).__name__}")
+    except Exception as e:
+        if type(e).__name__ == "TimeoutError" or "timed out" in str(e).lower():
+            raise RuntimeError(f"Groq {label} timeout")
+        raise RuntimeError(f"Groq {label} request failed: {type(e).__name__}")
+
+
+def _call_groq_stt(auth_headers, audio_bytes: bytes, mime_type: str) -> str:
+    """Transcribe a webm chunk with Whisper. Returns raw transcript text (may be '')."""
+    catalog_str = ", ".join(VOICE_CATALOG_BRANDS)
+    fields = {
+        "model": GROQ_STT_MODEL,
+        "language": "en",
+        "temperature": "0",
+        "response_format": "json",
+        # Hint proper nouns so brands/prices transcribe correctly (max 224 tokens).
+        "prompt": "Car export form dictation in English. Brands: %s. "
+        "Fields: year, purchase price in Canadian dollars, mileage in kilometers." % catalog_str,
+    }
+    body, content_type = _encode_multipart(fields, "chunk.webm", audio_bytes, mime_type or "audio/webm")
+    req = urllib.request.Request(
+        GROQ_STT_URL, data=body,
+        headers={"Content-Type": content_type, "User-Agent": GROQ_USER_AGENT, **auth_headers},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=VOICE_GROQ_STT_TIMEOUT_S) as resp:
+            outer = json.loads(resp.read().decode("utf-8", errors="replace"))
+    except urllib.error.HTTPError as e:
+        try:
+            detail = e.read().decode("utf-8", errors="replace")[:300]
+        except Exception:
+            detail = ""
+        raise RuntimeError(f"Groq STT HTTP {e.code} {detail.strip()}"[:320])
+    except urllib.error.URLError as e:
+        raise RuntimeError(f"Groq STT network error: {type(e).__name__}")
+    except Exception as e:
+        if type(e).__name__ == "TimeoutError" or "timed out" in str(e).lower():
+            raise RuntimeError("Groq STT timeout")
+        raise RuntimeError(f"Groq STT request failed: {type(e).__name__}")
+    try:
+        text = outer.get("text", "")
+        return text if isinstance(text, str) else str(text)
+    except Exception:
+        raise RuntimeError("Groq STT bad response shape")
+
+
+# Dotted field names the frontend apply-paths understand (App.tsx
+# handleVoiceChunk). missing_for_current_step MUST only contain these.
+VOICE_FIELD_PATHS = (
+    "vehicle.brand",
+    "vehicle.model",
+    "vehicle.year",
+    "vehicle.purchasePriceCad",
+    "vehicle.mileageKm",
+    "vehicle.category",
+    "destination",
+    "transport.routeId",
+    "transport.batchVehiclesCount",
+    "customs.country",
+    "customs.valuationBasis",
+)
+
+# Flat vehicle keys the LLM sometimes returns at updates top level.
+# The normalizer wraps them into updates.vehicle (see _normalize_voice_updates).
+VOICE_FLAT_VEHICLE_KEYS = (
+    "brand",
+    "model",
+    "year",
+    "purchasePriceCad",
+    "mileageKm",
+    "category",
+)
+
+
+def _call_groq_llm(auth_headers, transcript: str, current_step: int, known_json: str, model: str) -> Dict[str, Any]:
+    """Extract the form-filler JSON from a transcript. json_object mode + Pydantic validation downstream."""
     catalog_str = ", ".join(VOICE_CATALOG_BRANDS)
     system_prompt = (
-        "You are a form filler for Quebec car export. English only. "
-        f"Step-1 fields: brand, model, year int 2000-{CURRENT_YEAR}, purchasePriceCad int, mileageKm int, category enum. "
+        "You are a form filler for Quebec car export. English only. Respond with a JSON object. "
+        "updates MUST be NESTED exactly like this example (no flat top-level brand/model/year keys): "
+        '{"vehicle": {"brand": "Honda", "model": "Civic", "year": 2005, '
+        '"purchasePriceCad": 4500, "mileageKm": 150000, "category": "berline"}, '
+        '"destination": "senegal", '
+        '"transport": {"routeId": "mtl-dkr-roro", "batchVehiclesCount": 1}, '
+        '"customs": {"country": "senegal", "valuationBasis": "invoice"}}. '
+        "Omit any sub-object with no heard value (or return it empty). "
+        f"Step-1 fields: brand, model, year int 2000-{CURRENT_YEAR}, purchasePriceCad int, mileageKm int, "
+        "category enum (citadine|berline|suv|camionnette). "
         "Also detect future: destination senegal|maroc + transport hints. "
         "Numbers-words to ints. Last value wins per field. "
         f"Brand normalization: map the heard brand to the closest entry of the catalog [{catalog_str}]; "
@@ -366,46 +532,48 @@ def _call_gemini_audio_parse(auth_headers, audio_bytes: bytes, mime_type: str, c
         "Never return a model without a matched brand. "
         "known_json contains confirmed[]. Fields at defaults and absent from confirmed MUST be listed "
         "in missing_for_current_step as confirm prompts. "
-        "Return ONLY JSON {updates, confidence 0-1, transcript, missing_for_current_step, next_prompt, future_hits}."
+        "NEVER list a field already in confirmed[] as missing. "
+        "missing_for_current_step MUST contain ONLY dotted field names from this exact list: "
+        "vehicle.brand, vehicle.model, vehicle.year, vehicle.purchasePriceCad, vehicle.mileageKm, "
+        "vehicle.category, destination, transport.routeId, transport.batchVehiclesCount, "
+        "customs.country, customs.valuationBasis. NEVER full sentences. "
+        "missing_for_current_step MUST only contain fields for the CURRENT step "
+        "(step 1 = vehicle.* only; step 2 = destination + customs.* only; step 3+ = transport.* only). "
+        "Fields for other steps go in future_hits, NEVER in missing_for_current_step. "
+        "destination and customs.country are ONE question: ask 'Senegal or Morocco?' once, fill both. "
+        "HUMAN QUESTIONS ONLY — never ask the user for an ID, code or enum value: "
+        "map the human answer to the code yourself. "
+        "Routes (map 'Dakar or Casablanca?' + 'RoRo or container?' to routeId): "
+        "mtl-dkr-roro = Montreal to Dakar by RoRo; mtl-casa-roro = Montreal to Casablanca by RoRo. "
+        "If the user says container, put 'transport-container' in future_hits (no container route exists yet). "
+        "Category mapping (English heard -> enum): sedan->berline, SUV->suv, city car/hatchback->citadine, "
+        "pickup/truck->camionnette. "
+        "Customs value mapping: 'invoice price'->invoice, 'documented value / Argus'->argus_official. "
+        "Always state units and bounds aloud in next_prompt: prices 'in Canadian dollars', "
+        "mileage 'in kilometers' (convert miles to km yourself), batch 'from 1 to 4', "
+        "year 'between 2000 and 2026'. "
+        "next_prompt MUST use plain human words, NEVER dotted field names, IDs or codes, "
+        "max 280 characters, 1-2 short sentences. "
+        "If the transcript is empty or noise, return updates {} with confidence 0. "
+        "Return ONLY a JSON object with keys {updates, confidence, transcript, missing_for_current_step, next_prompt, future_hits}."
     )
-    audio_b64 = base64.b64encode(audio_bytes).decode("ascii")
     payload = {
-        "system_instruction": {"parts": [{"text": system_prompt}]},
-        "contents": [
-            {
-                "parts": [
-                    {"text": f"current_step={current_step} known_json={known_json}"},
-                    {"inlineData": {"mimeType": mime_type, "data": audio_b64}},
-                ]
-            }
+        "model": model,
+        "temperature": 0.2,
+        "response_format": {"type": "json_object"},
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"current_step={current_step} known_json={known_json} transcript={transcript}"},
         ],
-        "generationConfig": {"temperature": 0.2, "responseMimeType": "application/json"},
     }
-    # Auth: x-goog-api-key header (legacy AIza keys) or Bearer token (gcloud
-    # ADC OAuth, covers accounts stuck with AQ. keys). Key/token never logged.
-    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
-    body = json.dumps(payload).encode("utf-8")
-    req = urllib.request.Request(
-        url, data=body,
-        headers={"Content-Type": "application/json", **auth_headers},
-        method="POST",
-    )
+    outer = _groq_post_json(GROQ_CHAT_URL, auth_headers, payload, VOICE_GROQ_LLM_TIMEOUT_S, "LLM")
     try:
-        with urllib.request.urlopen(req, timeout=VOICE_GEMINI_TIMEOUT_S) as resp:
-            raw_body = resp.read().decode("utf-8", errors="replace")
-    except urllib.error.HTTPError as e:
-        raise RuntimeError(f"Gemini HTTP {e.code}")
-    except urllib.error.URLError as e:
-        raise RuntimeError(f"Gemini network error: {type(e).__name__}")
-    except Exception as e:
-        if type(e).__name__ == "TimeoutError" or "timed out" in str(e).lower():
-            raise RuntimeError("Gemini timeout")
-        raise RuntimeError(f"Gemini request failed: {type(e).__name__}")
-    try:
-        outer = json.loads(raw_body)
-        text = outer["candidates"][0]["content"]["parts"][0]["text"]
+        text = outer["choices"][0]["message"]["content"]
     except Exception:
-        raise RuntimeError("Gemini bad response shape")
+        raise RuntimeError("Groq LLM bad response shape")
+    if not isinstance(text, str):
+        raise RuntimeError("Groq LLM bad response shape")
+    _voice_debug(f"[parse] LLM model={model} raw={text.strip()[:800]}")
     text = text.strip()
     if text.startswith("```"):
         lines = text.splitlines()
@@ -415,9 +583,171 @@ def _call_gemini_audio_parse(auth_headers, audio_bytes: bytes, mime_type: str, c
             lines = lines[:-1]
         text = "\n".join(lines).strip()
     try:
-        return json.loads(text)
+        parsed = json.loads(text)
     except Exception:
-        raise RuntimeError("Gemini non-JSON reply")
+        raise RuntimeError("Groq LLM non-JSON reply")
+    if not isinstance(parsed, dict):
+        raise RuntimeError("Groq LLM non-JSON reply")
+    # The transcript comes from our STT step, not the LLM: authoritative copy.
+    parsed["transcript"] = transcript
+    return parsed
+
+
+def _call_groq_audio_parse(auth_headers, audio_bytes: bytes, mime_type: str, current_step: int, known_json: str) -> Dict[str, Any]:
+    """Two-step voice parse: Whisper STT (audio->text) then LLM (text->form JSON)."""
+    transcript = _call_groq_stt(auth_headers, audio_bytes, mime_type).strip()
+    _voice_debug(f"[parse] STT transcript={transcript[:300]}")
+    # Guard: near-silent chunks and known Whisper hallucinations -> "heard nothing",
+    # skip the LLM call entirely (saves latency + cost).
+    if len(transcript.split()) < 2 or transcript.strip().lower().rstrip(".!") in VOICE_STT_NOISE_PHRASES:
+        _voice_debug("[parse] STT noise guard -> empty result, LLM skipped")
+        return {
+            "updates": {},
+            "confidence": 0.0,
+            "transcript": transcript,
+            "missing_for_current_step": [],
+            "next_prompt": "I didn't catch that. Please say it again.",
+            "future_hits": [],
+        }
+    try:
+        return _call_groq_llm(auth_headers, transcript, current_step, known_json, GROQ_LLM_MODEL)
+    except RuntimeError as e:
+        # Partial retry: LLM failed but the transcript is good — replay the LLM
+        # step once on the fallback model WITHOUT re-transcribing the audio.
+        voice_log.info("parse-audio: primary LLM failed (%s), retrying on %s", str(e)[:100], GROQ_LLM_FALLBACK_MODEL)
+        _voice_debug(f"[parse] LLM primary failed ({str(e)[:120]}), retry on {GROQ_LLM_FALLBACK_MODEL}")
+        return _call_groq_llm(auth_headers, transcript, current_step, known_json, GROQ_LLM_FALLBACK_MODEL)
+
+
+# Dotted field path (or bare code word) -> human words for next_prompt.
+# next_prompt is displayed in the bubble AND spoken aloud: it must never
+# contain IDs, codes or enum values. Longest keys first to avoid partial hits.
+VOICE_FIELD_LABELS = {
+    "vehicle.purchasePriceCad": "the purchase price in Canadian dollars",
+    "transport.batchVehiclesCount": "the number of vehicles shipped together (1 to 4)",
+    "transport.routeId": "the transport route (Dakar or Casablanca, RoRo or container)",
+    "customs.valuationBasis": "whether customs should use the invoice price or the documented value",
+    "vehicle.mileageKm": "the mileage in kilometers",
+    "customs.country": "the customs country (Senegal or Morocco)",
+    "vehicle.category": "the vehicle type (SUV, sedan, city car or pickup)",
+    "vehicle.brand": "the brand",
+    "vehicle.model": "the model",
+    "vehicle.year": "the vehicle year (2000 to 2026)",
+    "destination": "the destination (Senegal or Morocco)",
+    "batchVehiclesCount": "the number of vehicles",
+    "valuationBasis": "the customs value",
+    "argus_official": "the documented value",
+    "routeId": "the transport route",
+}
+
+
+def _humanize_prompt(prompt: str) -> str:
+    """Replace any leaked internal code with human words. Deterministic
+    safety net: the prompt already forbids codes in next_prompt."""
+    if not isinstance(prompt, str) or not prompt:
+        return prompt
+    out = prompt
+    for code in sorted(VOICE_FIELD_LABELS, key=len, reverse=True):
+        if code in out:
+            out = out.replace(code, VOICE_FIELD_LABELS[code])
+    return out
+
+
+# Route IDs the backend /calculate actually knows (derived from DEFAULT_CONFIG
+# so this never drifts). A voice-filled routeId outside this set is dropped
+# with a debug line instead of breaking the calculation silently.
+VOICE_KNOWN_ROUTE_IDS = frozenset(r.get("id", "") for r in DEFAULT_CONFIG.get("routes", []))
+
+
+# Legacy simple names the LLM sometimes uses in missing_for_current_step.
+# Mapped to the dotted paths the frontend understands; anything else is dropped.
+VOICE_MISSING_ALIASES = {
+    "brand": "vehicle.brand",
+    "model": "vehicle.model",
+    "year": "vehicle.year",
+    "purchasePriceCad": "vehicle.purchasePriceCad",
+    "price": "vehicle.purchasePriceCad",
+    "mileageKm": "vehicle.mileageKm",
+    "mileage": "vehicle.mileageKm",
+    "category": "vehicle.category",
+    "destination": "destination",
+    "routeId": "transport.routeId",
+    "batchVehiclesCount": "transport.batchVehiclesCount",
+    "country": "destination",
+    "valuationBasis": "customs.valuationBasis",
+}
+
+
+def _normalize_voice_updates(parsed: Dict[str, Any]) -> Dict[str, Any]:
+    """ coerce an LLM reply into the exact contract handleVoiceChunk reads.
+
+    Safety net for model variance: the prompt already demands NESTED updates
+    and dotted missing names, but if the model returns flat top-level vehicle
+    keys ({brand, model, ...}) or sentence-style missing entries, they are
+    wrapped/mapped here instead of being silently dropped by the frontend
+    (which caused the "heard but never filled" loop).
+    """
+    if not isinstance(parsed, dict):
+        return parsed
+    updates = parsed.get("updates")
+    if isinstance(updates, dict):
+        flat = {k: updates.pop(k) for k in VOICE_FLAT_VEHICLE_KEYS if k in updates}
+        if flat:
+            vehicle = updates.get("vehicle")
+            if not isinstance(vehicle, dict):
+                vehicle = {}
+                updates["vehicle"] = vehicle
+            for k, v in flat.items():
+                vehicle.setdefault(k, v)
+            parsed["updates"] = updates
+            _voice_debug(f"[parse] normalized flat updates -> vehicle keys=[{','.join(sorted(flat.keys()))}]")
+        # A routeId the calculator doesn't know would break /calculate:
+        # drop it loudly instead of letting it through.
+        transport = updates.get("transport")
+        if isinstance(transport, dict):
+            route_id = transport.get("routeId")
+            if isinstance(route_id, str) and route_id and route_id not in VOICE_KNOWN_ROUTE_IDS:
+                _voice_debug(f"[parse] dropped unknown routeId={route_id}")
+                transport.pop("routeId", None)
+                if not transport:
+                    updates.pop("transport", None)
+    missing = parsed.get("missing_for_current_step")
+    if isinstance(missing, list):
+        valid = set(VOICE_FIELD_PATHS)
+        normalized = []
+        for item in missing:
+            if not isinstance(item, str):
+                continue
+            key = item.strip()
+            if key in valid:
+                normalized.append(key)
+            elif key in VOICE_MISSING_ALIASES:
+                normalized.append(VOICE_MISSING_ALIASES[key])
+        if normalized != missing:
+            _voice_debug(f"[parse] normalized missing {missing} -> {normalized}")
+        parsed["missing_for_current_step"] = normalized
+    prompt = parsed.get("next_prompt", "")
+    human = _humanize_prompt(prompt)
+    if len(human) > 280:
+        # Too many missing fields to list: summarize instead of reading a
+        # paragraph aloud (the bubble shows details via "Still need" anyway).
+        labels = [
+            VOICE_FIELD_LABELS.get(m, m).split(" (")[0]
+            for m in parsed.get("missing_for_current_step", [])
+            if isinstance(m, str)
+        ]
+        if len(labels) >= 2:
+            rest = len(labels) - 2
+            human = f"Please provide {labels[0]}, {labels[1]} and {rest} more detail{'s' if rest != 1 else ''}."
+        elif len(labels) == 1:
+            human = f"Please provide {labels[0]}."
+        else:
+            human = human[:277] + "..."
+        _voice_debug(f"[parse] prompt summarized to {len(human)} chars")
+    if human != prompt:
+        _voice_debug(f"[parse] humanized prompt {prompt[:200]} -> {human[:200]}")
+        parsed["next_prompt"] = human
+    return parsed
 
 
 @app.post("/api/voice/parse-audio", response_model=VoiceParseResponse)
@@ -427,25 +757,34 @@ async def voice_parse_audio(
     known_json: str = Form(default="{}"),
 ):
     try:
-        auth_headers, auth_mode = _resolve_gemini_auth()
+        auth_headers, _ = _resolve_groq_auth()
     except RuntimeError as e:
         voice_log.warning("parse-audio 503: %s", str(e)[:160])
+        _voice_debug(f"[parse] 503 {str(e)[:160]}")
         return JSONResponse(status_code=503, content={"error": str(e)[:200], "retryable": False})
     data = await audio.read()
+    _voice_debug(f"[parse] REQ bytes={len(data)} step={current_step} known={known_json[:300]}")
     if len(data) == 0:
         voice_log.warning("parse-audio 400: received empty audio chunk")
-        return JSONResponse(status_code=400, content={"error": "empty audio", "retryable": False})
+        _voice_debug("[parse] 400 empty audio")
+        return JSONResponse(status_code=400, content={"error": "empty audio", "retryable": True})
     if len(data) > VOICE_MAX_AUDIO_BYTES:
         voice_log.warning("parse-audio 413: audio chunk too large (%d bytes, max %d)", len(data), VOICE_MAX_AUDIO_BYTES)
-        return JSONResponse(status_code=413, content={"error": "audio too large (max ~2MB)", "retryable": False})
+        _voice_debug(f"[parse] 413 too large bytes={len(data)}")
+        return JSONResponse(status_code=413, content={"error": "audio too large (max ~2MB)", "retryable": True})
     mime_type = audio.content_type or "audio/webm"
     try:
-        parsed = _call_gemini_audio_parse(auth_headers, data, mime_type, current_step, known_json)
+        parsed = _call_groq_audio_parse(auth_headers, data, mime_type, current_step, known_json)
+        parsed = _normalize_voice_updates(parsed)
     except RuntimeError as e:
-        voice_log.warning("parse-audio 502: Gemini call failed (%s) - chunk %d bytes, step %d", str(e)[:120], len(data), current_step)
-        return JSONResponse(status_code=502, content={"error": str(e)[:160], "retryable": True})
+        # Full provider detail stays in the server log; the client gets a
+        # generic message (provider errors can mention model/quota internals).
+        voice_log.warning("parse-audio 502: Groq call failed (%s) - chunk %d bytes, step %d", str(e)[:160], len(data), current_step)
+        _voice_debug(f"[parse] 502 {str(e)[:200]}")
+        return JSONResponse(status_code=502, content={"error": "voice parse failed", "retryable": True})
     except Exception:
         voice_log.warning("parse-audio 502: unexpected failure before validation - chunk %d bytes", len(data))
+        _voice_debug("[parse] 502 unexpected failure before validation")
         return JSONResponse(status_code=502, content={"error": "voice parse failed", "retryable": True})
     try:
         if not isinstance(parsed, dict):
@@ -466,20 +805,25 @@ async def voice_parse_audio(
         missing = parsed.get("missing_for_current_step", [])
         if not isinstance(missing, list):
             raise ValueError("invalid missing shape")
-        missing = [str(x) for x in missing]
+        missing = [x for x in missing if isinstance(x, str)]
         next_prompt = parsed.get("next_prompt", "")
         if not isinstance(next_prompt, str):
             next_prompt = str(next_prompt)
         future_hits = parsed.get("future_hits", [])
         if not isinstance(future_hits, list):
             raise ValueError("invalid future_hits shape")
-        future_hits = [str(x) for x in future_hits]
+        future_hits = [x for x in future_hits if isinstance(x, str)]
     except ValueError as e:
-        voice_log.warning("parse-audio 502: Gemini reply failed validation (%s)", str(e)[:120])
+        voice_log.warning("parse-audio 502: Groq reply failed validation (%s)", str(e)[:120])
+        _voice_debug(f"[parse] 502 validation failed ({str(e)[:120]})")
         return JSONResponse(status_code=502, content={"error": str(e)[:160], "retryable": True})
     voice_log.info(
         "parse-audio 200: conf=%.2f updated=[%s] missing=%d transcript=%.120s",
         confidence, ",".join(sorted(updates.keys())), len(missing), transcript,
+    )
+    _voice_debug(
+        f"[parse] 200 conf={confidence:.2f} updated=[{','.join(sorted(updates.keys()))}] "
+        f"missing={missing} transcript={transcript[:200]} next={next_prompt[:150]}"
     )
     return VoiceParseResponse(
         updates=updates,
@@ -491,66 +835,15 @@ async def voice_parse_audio(
     )
 
 
-def _call_gemini_tts(auth_headers, text: str, voice: str) -> bytes:
-    payload = {
-        "contents": [{"parts": [{"text": text}]}],
-        "generationConfig": {
-            "responseModalities": ["AUDIO"],
-            "speechConfig": {"voiceConfig": {"prebuiltVoiceConfig": {"voiceName": voice or "Kore"}}},
-        },
-    }
-    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-tts:generateContent"
-    body = json.dumps(payload).encode("utf-8")
-    req = urllib.request.Request(
-        url, data=body,
-        headers={"Content-Type": "application/json", **auth_headers},
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=VOICE_GEMINI_TIMEOUT_S) as resp:
-            raw_body = resp.read().decode("utf-8", errors="replace")
-    except urllib.error.HTTPError as e:
-        raise RuntimeError(f"Gemini HTTP {e.code}")
-    except urllib.error.URLError:
-        raise RuntimeError("Gemini network error")
-    except Exception as e:
-        if type(e).__name__ == "TimeoutError" or "timed out" in str(e).lower():
-            raise RuntimeError("Gemini timeout")
-        raise RuntimeError(f"Gemini request failed: {type(e).__name__}")
-    try:
-        outer = json.loads(raw_body)
-        parts = outer["candidates"][0]["content"]["parts"]
-        audio_b64 = next(
-            p["inlineData"]["data"]
-            for p in parts
-            if isinstance(p, dict) and isinstance(p.get("inlineData"), dict) and p["inlineData"].get("data")
-        )
-    except Exception:
-        raise RuntimeError("Gemini bad response shape")
-    try:
-        return base64.b64decode(audio_b64)
-    except Exception:
-        raise RuntimeError("Gemini bad audio payload")
+@app.post("/api/voice/client-event")
+async def voice_client_event(ev: VoiceClientEvent):
+    """Append a frontend voice decision to logs/voice-debug.txt.
 
-
-@app.post("/api/voice/speak")
-async def voice_speak(req: VoiceSpeakRequest):
-    text = (req.text or "").strip()
-    if not text or len(text) > 280:
-        voice_log.warning("speak 400: text length %d (must be 1..280 chars)", len(text))
-        return JSONResponse(status_code=400, content={"error": "text must be 1..280 chars", "retryable": False})
-    try:
-        auth_headers, auth_mode = _resolve_gemini_auth()
-    except RuntimeError as e:
-        voice_log.warning("speak 503: %s", str(e)[:160])
-        return JSONResponse(status_code=503, content={"error": str(e)[:200], "retryable": False})
-    try:
-        audio_bytes = _call_gemini_tts(auth_headers, text, req.voice)
-    except RuntimeError as e:
-        voice_log.warning("speak 502: Gemini TTS failed (%s) - text %d chars", str(e)[:120], len(text))
-        return JSONResponse(status_code=502, content={"error": str(e)[:160], "retryable": True})
-    except Exception:
-        voice_log.warning("speak 502: unexpected TTS failure - text %d chars", len(text))
-        return JSONResponse(status_code=502, content={"error": "voice speak failed", "retryable": True})
-    voice_log.info("speak 200: %d chars -> %d audio bytes (voice=%s)", len(text), len(audio_bytes), req.voice)
-    return Response(content=audio_bytes, media_type="audio/mpeg")
+    Fire-and-forget from the browser: shows why a heard chunk did or did
+    not fill fields (gate, freeze, applied paths...). Detail is capped so a
+    runaway client cannot fill the disk. Never cleared server-side.
+    """
+    kind = (ev.kind or "event")[:40]
+    detail = (ev.detail or "")[:2000]
+    _voice_debug(f"[frontend:{kind}] {detail}")
+    return {"ok": True}
