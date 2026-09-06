@@ -112,6 +112,8 @@ export interface FreightComparisonResult {
   }>;
   coverage?: {
     targetExternalOffers?: number;
+    targetCoveragePercent?: number;
+    coveragePercent?: number;
     externalOfferCount?: number;
     achieved?: boolean;
     freshOfferCount?: number;

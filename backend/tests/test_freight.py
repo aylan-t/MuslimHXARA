@@ -19,10 +19,16 @@ def raw_offer(amount=2000):
             "components": {}, "confidence": .8}
 
 
+def bankable_offer(amount=2000):
+    return {**raw_offer(amount), "status": "partner_rate",
+            "retrievedAt": datetime.now(timezone.utc).isoformat(),
+            "validUntil": (datetime.now(timezone.utc) + timedelta(days=1)).isoformat()}
+
+
 class GoodProvider:
     name = "Good"
     def quote(self, route, vehicle_count):
-        return [raw_offer()]
+        return [bankable_offer()]
 
 
 class BrokenProvider:
@@ -43,7 +49,8 @@ class FreightTests(unittest.TestCase):
         expired = {**raw_offer(), "id": "expired", "routeId": ROUTE["id"], "provider": "Bank",
                    "status": "available", "retrievedAt": datetime.now(timezone.utc).isoformat(),
                    "validUntil": (datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat()}
-        self.repo.save_offer(expired, ROUTE)
+        with self.assertRaisesRegex(ValueError, "Expired or undated"):
+            self.repo.save_offer(expired, ROUTE)
         self.assertFalse(self.repo.current_offers(ROUTE["id"]))
 
     def test_provider_failure_is_isolated(self):
@@ -53,9 +60,7 @@ class FreightTests(unittest.TestCase):
                             for item in result["providerStatuses"]))
 
     def test_live_quote_precedes_bank_quote(self):
-        bank = {**raw_offer(1000), "id": "bank", "routeId": ROUTE["id"], "provider": "Good",
-                "status": "available", "retrievedAt": datetime.now(timezone.utc).isoformat(),
-                "validUntil": (datetime.now(timezone.utc) + timedelta(days=1)).isoformat()}
+        bank = {**bankable_offer(1000), "id": "bank", "routeId": ROUTE["id"], "provider": "Good"}
         self.repo.save_offer(bank, ROUTE)
         result = FreightService(self.repo, [GoodProvider()]).compare([ROUTE], 1)
         self.assertEqual(result["offers"][0]["amountCad"], 2000)
@@ -63,13 +68,9 @@ class FreightTests(unittest.TestCase):
 
     def test_coverage_and_rfq_persistence(self):
         service = FreightService(self.repo, [])
-        first = service.import_quote({**raw_offer(), "provider": "One", "status": "available",
-                    "retrievedAt": datetime.now(timezone.utc).isoformat(),
-                    "validUntil": (datetime.now(timezone.utc) + timedelta(days=1)).isoformat()}, ROUTE)
+        first = service.import_quote({**bankable_offer(), "provider": "One"}, ROUTE)
         self.assertFalse(service.coverage([ROUTE])["achieved"])
-        service.import_quote({**raw_offer(), "provider": "Two", "status": "available",
-                    "retrievedAt": datetime.now(timezone.utc).isoformat(),
-                    "validUntil": (datetime.now(timezone.utc) + timedelta(days=1)).isoformat()}, ROUTE)
+        service.import_quote({**bankable_offer(), "provider": "Two"}, ROUTE)
         self.assertTrue(service.coverage([ROUTE])["achieved"])
         rfq = service.create_rfq({"route": ROUTE, "vehicleCount": 1, "shipmentDetails": {}})
         self.assertEqual(service.repository.get_rfq(rfq["id"])["id"], rfq["id"])
@@ -79,6 +80,24 @@ class FreightTests(unittest.TestCase):
             {channel["provider"] for channel in rfq["channels"]},
             {"Wallenius Wilhelmsen", "IMS Shipping"},
         )
+
+    def test_matrix_coverage_requires_two_sources_on_95_percent_of_routes(self):
+        service = FreightService(self.repo, [])
+        result = service.validate_matrix()
+        self.assertEqual(result["coveragePercent"], 0.0)
+        self.assertFalse(result["achieved"])
+        self.assertEqual(len(result["routes"]), 6)
+
+    def test_marketplace_estimate_is_not_banked_or_counted(self):
+        class EstimateProvider:
+            name = "Estimate"
+            def quote(self, route, vehicle_count):
+                return [{**raw_offer(), "status": "marketplace_estimate"}]
+        service = FreightService(self.repo, [EstimateProvider()])
+        result = service.compare([ROUTE], 1)
+        self.assertEqual(len(result["offers"]), 1)
+        self.assertFalse(self.repo.current_offers(ROUTE["id"]))
+        self.assertEqual(result["coverage"]["externalOfferCount"], 0)
 
 
 class FakeResponse:

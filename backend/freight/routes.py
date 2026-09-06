@@ -32,6 +32,11 @@ def coverage():
     return service.coverage()
 
 
+@router.get("/coverage/matrix")
+def matrix_coverage():
+    return service.validate_matrix()
+
+
 @router.post("/rfq")
 def create_rfq(request: RfqRequest):
     return service.create_rfq(request.model_dump())
@@ -52,4 +57,7 @@ def import_quote(
 ):
     value = request.model_dump()
     route = value.pop("route")
-    return service.import_quote(value, route)
+    try:
+        return service.import_quote(value, route)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc

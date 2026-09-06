@@ -57,6 +57,8 @@ class FreightRepository:
             """)
 
     def save_offer(self, offer: Dict[str, Any], route: Dict[str, Any]) -> None:
+        if not is_unexpired(offer.get("validUntil")):
+            raise ValueError("Expired or undated offers cannot be stored")
         with self._lock, self._connect() as conn:
             conn.execute("""
               INSERT OR REPLACE INTO offers

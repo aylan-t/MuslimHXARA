@@ -1,5 +1,6 @@
 import json
 import os
+from datetime import datetime, timezone
 from typing import Any, Dict, List
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
@@ -41,8 +42,8 @@ class FreightosAdapter(ProviderAdapter):
 
     def __init__(self):
         self.api_key = os.getenv("FREIGHTOS_API_KEY")
-        self.base_url = os.getenv("FREIGHTOS_BASE_URL")
-        self.configured = bool(self.api_key)
+        self.base_url = os.getenv("FREIGHTOS_BASE_URL", "").strip()
+        self.configured = bool(self.api_key and self.base_url)
 
     @staticmethod
     def _records(payload):
@@ -124,10 +125,12 @@ class FreightosAdapter(ProviderAdapter):
             high_cad = round(original_high * conversion)
             quote_id = record.get("quoteId") or record.get("quote_id")
             binding = bool(record.get("binding") or record.get("isBinding"))
-            if self.api_key and quote_id and binding:
+            if self.configured and quote_id and binding:
                 status = "carrier_quote" if record.get("carrier") or record.get("carrierName") else "partner_rate"
             else:
                 status = "marketplace_estimate"
+            retrieved_at = record.get("retrievedAt") or record.get("createdAt")
+            valid_until = record.get("validUntil") or record.get("expiresAt") or record.get("expiration")
             transit = record.get("transitTimes") if isinstance(record.get("transitTimes"), dict) else {}
             transit_min = transit.get("min") or record.get("transitTime") or record.get("transitDays")
             transit_max = transit.get("max") or transit_min
@@ -137,7 +140,9 @@ class FreightosAdapter(ProviderAdapter):
                             "estimatedDaysMin": transit_min, "estimatedDaysMax": transit_max,
                             "carrierName": record.get("carrierName") or record.get("carrier"),
                             "status": status, "sourceUrl": endpoint,
-                            "attribution": "Freightos shippingCalculator"})
+                             "attribution": "Freightos shippingCalculator",
+                             "providerQuoteId": quote_id, "retrievedAt": retrieved_at,
+                             "validUntil": valid_until})
         return results
 
 
@@ -147,6 +152,7 @@ class SeaRatesAdapter(ProviderAdapter):
 
     def __init__(self):
         self.api_key = os.getenv("SEARATES_API_KEY")
+        self.endpoint = os.getenv("SEARATES_BASE_URL", self.endpoint).strip()
         self.configured = bool(self.api_key)
 
     def quote(self, route, vehicle_count):
@@ -156,7 +162,7 @@ class SeaRatesAdapter(ProviderAdapter):
         if not origin or not destination:
             return []
         query = """query { shipment: fcl(ST40: 1, from: [%s, %s], to: [%s, %s], currency: CAD) {
-          shipmentId freight: oceanFreight { price transitTime shippingLine } } }""" % (
+          shipmentId freight: oceanFreight { price transitTime shippingLine validUntil } } }""" % (
             origin[0], origin[1], destination[0], destination[1])
         request = Request(self.endpoint, data=json.dumps({"query": query}).encode(), headers={
             "Authorization": "Bearer " + self.api_key, "Content-Type": "application/json"})
@@ -169,11 +175,15 @@ class SeaRatesAdapter(ProviderAdapter):
             if not isinstance(item, dict) or not isinstance(item.get("price"), (int, float)):
                 continue
             price, transit = item["price"], item.get("transitTime")
+            valid_until = item.get("validUntil")
             results.append({"amountCad": price, "lowCad": price, "highCad": price, "currency": "CAD",
                             "originalLow": price, "originalHigh": price, "estimatedDaysMin": transit,
                             "estimatedDaysMax": transit, "carrierName": item.get("shippingLine"),
-                            "status": "marketplace_estimate", "sourceUrl": self.endpoint,
-                            "attribution": "SeaRates FCL rate"})
+                             "status": "partner_rate" if shipment.get("shipmentId") and valid_until else "marketplace_estimate",
+                             "sourceUrl": self.endpoint, "attribution": "SeaRates FCL rate",
+                             "providerQuoteId": shipment.get("shipmentId"),
+                             "retrievedAt": datetime.now(timezone.utc).isoformat(),
+                             "validUntil": valid_until})
         return results
 
 

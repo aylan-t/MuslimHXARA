@@ -6,6 +6,8 @@ from .providers import active_adapters
 from .repository import FreightRepository, utc_now
 
 TARGET_EXTERNAL_OFFERS = 2
+TARGET_COVERAGE_PERCENT = 95
+COUNTABLE_STATUSES = frozenset({"carrier_quote", "partner_rate"})
 PUBLIC_RFQ_CHANNELS = [
     {
         "provider": "Wallenius Wilhelmsen",
@@ -50,15 +52,34 @@ class FreightService:
             return None
         if not all(isinstance(raw[key], (int, float)) for key in fields if key != "currency"):
             return None
-        now = datetime.now(timezone.utc)
+        retrieved_at = raw.get("retrievedAt")
+        valid_until = raw.get("validUntil")
         return {"id": "offer_" + uuid4().hex, "routeId": route["id"], "provider": provider,
                 "carrierName": raw.get("carrierName"), "status": raw.get("status", "available"),
                 **{key: raw[key] for key in fields}, "estimatedDaysMin": raw.get("estimatedDaysMin"),
-                "estimatedDaysMax": raw.get("estimatedDaysMax"), "retrievedAt": utc_now(),
-                "validUntil": raw.get("validUntil", (now + timedelta(hours=24)).isoformat()),
+                "estimatedDaysMax": raw.get("estimatedDaysMax"), "retrievedAt": retrieved_at or utc_now(),
+                "validUntil": valid_until,
                 "sourceUrl": raw.get("sourceUrl", ""), "attribution": raw.get("attribution", provider),
                 "inclusions": raw.get("inclusions", []), "exclusions": raw.get("exclusions", []),
-                "components": raw.get("components", {}), "confidence": raw.get("confidence", 0.7)}
+                "components": raw.get("components", {}), "confidence": raw.get("confidence", 0.7),
+                "providerQuoteId": raw.get("providerQuoteId")}
+
+    @staticmethod
+    def _is_bankable(offer):
+        if offer.get("status") not in COUNTABLE_STATUSES:
+            return False
+        if not offer.get("providerQuoteId") and not offer.get("sourceUrl"):
+            return False
+        try:
+            retrieved = datetime.fromisoformat(offer["retrievedAt"].replace("Z", "+00:00"))
+            expires = datetime.fromisoformat(offer["validUntil"].replace("Z", "+00:00"))
+            if retrieved.tzinfo is None:
+                retrieved = retrieved.replace(tzinfo=timezone.utc)
+            if expires.tzinfo is None:
+                expires = expires.replace(tzinfo=timezone.utc)
+            return retrieved <= datetime.now(timezone.utc) < expires
+        except (AttributeError, KeyError, TypeError, ValueError):
+            return False
 
     @staticmethod
     def _dedupe(offers):
@@ -78,6 +99,8 @@ class FreightService:
                     valid = [self._normalise(item, route, adapter.name) for item in results]
                     valid = [item for item in valid if item]
                     for offer in valid:
+                        if not self._is_bankable(offer):
+                            continue
                         self.repository.save_offer(offer, route)
                     live.extend(valid)
                     if valid:
@@ -104,27 +127,32 @@ class FreightService:
     def coverage(self, routes=None, offers=None):
         current = offers if offers is not None else self.repository.all_current_offers()
         route_ids = [route["id"] for route in routes] if routes else sorted({x["routeId"] for x in current})
-        per_route = [{"routeId": route_id, "externalOffers": len({x["provider"] for x in current if x["routeId"] == route_id}),
-                      "achieved": len({x["provider"] for x in current if x["routeId"] == route_id}) >= TARGET_EXTERNAL_OFFERS}
+        countable = [item for item in current if self._is_bankable(item)]
+        per_route = [{"routeId": route_id, "externalOffers": len({x["provider"] for x in countable if x["routeId"] == route_id}),
+                      "achieved": len({x["provider"] for x in countable if x["routeId"] == route_id}) >= TARGET_EXTERNAL_OFFERS}
                      for route_id in route_ids]
         freshness = [{"routeId": item["routeId"], "provider": item["provider"],
                       "retrievedAt": item["retrievedAt"], "validUntil": item["validUntil"]}
-                     for item in current]
+                     for item in countable]
         now = datetime.now(timezone.utc)
         near_expiry = now + timedelta(hours=6)
         stale = 0
-        for item in current:
+        for item in countable:
             try:
                 until = datetime.fromisoformat(item["validUntil"].replace("Z", "+00:00"))
                 until = until.replace(tzinfo=timezone.utc) if until.tzinfo is None else until
                 stale += int(until <= near_expiry)
             except (KeyError, TypeError, ValueError):
                 stale += 1
-        retrieved = [item.get("retrievedAt") for item in current if item.get("retrievedAt")]
+        retrieved = [item.get("retrievedAt") for item in countable if item.get("retrievedAt")]
         observations = self.repository.observations()
-        return {"targetExternalOffers": TARGET_EXTERNAL_OFFERS, "routes": per_route,
-                "achieved": len(current) >= TARGET_EXTERNAL_OFFERS,
-                "externalOfferCount": len(current), "freshOfferCount": len(current) - stale,
+        achieved_routes = sum(1 for item in per_route if item["achieved"])
+        coverage_percent = round(100 * achieved_routes / len(per_route), 1) if per_route else 0.0
+        return {"targetExternalOffers": TARGET_EXTERNAL_OFFERS,
+                "targetCoveragePercent": TARGET_COVERAGE_PERCENT,
+                "coveragePercent": coverage_percent, "routes": per_route,
+                "achieved": bool(per_route) and coverage_percent >= TARGET_COVERAGE_PERCENT,
+                "externalOfferCount": len(countable), "freshOfferCount": len(countable) - stale,
                 "staleOfferCount": stale, "lastRefreshedAt": max(retrieved) if retrieved else None,
                 "freshness": freshness,
                 "observations": observations, "providerObservations": observations}
@@ -132,8 +160,13 @@ class FreightService:
     def import_quote(self, quote, route):
         offer = quote.copy()
         offer["id"], offer["routeId"] = "offer_" + uuid4().hex, route["id"]
+        if not self._is_bankable(offer):
+            raise ValueError("Only authentic, current carrier or partner quotes can be imported")
         self.repository.save_offer(offer, route)
         return offer
+
+    def validate_matrix(self):
+        return self.coverage(KNOWN_ROUTE_MATRIX)
 
     def create_rfq(self, payload):
         identifier = "rfq_" + uuid4().hex

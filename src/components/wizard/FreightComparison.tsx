@@ -151,6 +151,7 @@ export const FreightComparison: React.FC<FreightComparisonProps> = ({
           </p>
           <p className="mt-1 text-xs text-slate-600">
             {coverage ? `${coverage.freshOfferCount ?? 0} récente${(coverage.freshOfferCount ?? 0) > 1 ? 's' : ''}, ${coverage.staleOfferCount ?? 0} à revalider` : 'Fraîcheur en cours de vérification'}
+             {coverage?.coveragePercent !== undefined ? ` · Couverture de la matrice : ${coverage.coveragePercent} %` : ''}
             {coverage?.lastRefreshedAt ? ` · relevé le ${formatDate(coverage.lastRefreshedAt)}` : ''} · Composantes de coût comparables lorsqu’elles sont détaillées.
           </p>
           {result.providerStatuses.length > 0 && (
