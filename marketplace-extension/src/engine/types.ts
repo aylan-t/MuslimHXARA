@@ -1,10 +1,13 @@
 // AUTO-GÉNÉRÉ par scripts/sync-engine.mjs — NE PAS ÉDITER.
-// Source : src/types/index.ts · EXTENSION_ENGINE_VERSION=89cf23b1def5a0e1ef9bff58e679eff3d3db2ff9 · sync=2026-09-06T06:13:47.247Z
+// Source : src/types/index.ts · EXTENSION_ENGINE_VERSION=d72cb8c705d41701f96a343c27e78c3e0ae75a6a · sync=2026-09-06T17:07:37.459Z
 export type DestinationCountry = 'senegal' | 'maroc';
 
 export type VehicleCategory = 'citadine' | 'berline' | 'suv' | 'camionnette';
 export type VehicleCondition = 'excellent' | 'tres_bon' | 'bon' | 'moyen';
 export type VehicleSource = 'particulier' | 'concessionnaire' | 'encan';
+export type FuelType = 'Gasoline' | 'Diesel' | 'Hybrid' | 'Electric';
+export type SteeringLayout = 'LHD' | 'RHD';
+export type VehicleClassification = 'passenger' | 'commercial_utility';
 
 export interface QuebecOriginRegion {
   id: string;
@@ -35,6 +38,13 @@ export interface Vehicle {
   year: number;
   mileageKm: number;
   purchasePriceCad: number;
+  engineCc: number;
+  fuelType: FuelType;
+  steering: SteeringLayout;
+  isJdm?: boolean;
+  vehicleClassification: VehicleClassification;
+  grossVehicleWeightKg: number;
+  classificationVerified: boolean;
   category: VehicleCategory;
   condition: VehicleCondition;
   source: VehicleSource;
@@ -51,6 +61,12 @@ export interface PreloadedVehicle {
   model: string;
   year: number;
   purchasePriceCad: number;
+  engineCc: number;
+  fuelType: FuelType;
+  steering: SteeringLayout;
+  vehicleClassification: VehicleClassification;
+  grossVehicleWeightKg: number;
+  classificationVerified: boolean;
   estimatedArgusCustomsCad: number; // Cote douanière officielle estimée
   mileageKm: number;
   category: VehicleCategory;
@@ -71,12 +87,19 @@ export interface FinancingConfig {
 
 export type TransportMode = 'roro' | 'conteneur_partage' | 'conteneur_complet';
 export type PriceStatus = 'official_tariff' | 'carrier_quote' | 'estimate' | 'quote_required';
-export type FreightOfferStatus = 'marketplace_estimate' | 'partner_rate';
+export type FreightOfferStatus = 'marketplace_estimate' | 'partner_rate' | 'carrier_quote';
+export type FreightOfferProvider =
+  | 'SeaRates'
+  | 'Freightos'
+  | 'Hapag-Lloyd'
+  | 'CMA CGM'
+  | 'Maersk'
+  | (string & {});
 
 export interface FreightMarketOffer {
   id: string;
   routeId: string;
-  provider: 'Freightos' | 'SeaRates';
+  provider: FreightOfferProvider;
   status: FreightOfferStatus;
   amountCad: number;
   lowCad: number;
@@ -87,17 +110,40 @@ export interface FreightMarketOffer {
   estimatedDaysMin?: number;
   estimatedDaysMax?: number;
   retrievedAt: string;
-  sourceUrl: string;
-  attribution: string;
+  sourceUrl?: string;
+  attribution?: string;
+  carrierName?: string;
+  validUntil?: string;
+  inclusions?: string[];
+  exclusions?: string[];
+  /** Backend cost-component mapping (for example: { oceanFreight: 2100 }). */
+  components?: Record<string, unknown>;
+  confidence?: 'high' | 'medium' | 'low' | number | string;
 }
 
 export interface FreightComparisonResult {
   offers: FreightMarketOffer[];
   providerStatuses: Array<{
-    provider: 'Freightos' | 'SeaRates';
-    status: 'available' | 'no_offer' | 'configuration_required' | 'error';
+    provider: FreightOfferProvider;
+    status: 'available' | 'no_offer' | 'error' | 'unavailable';
     message: string;
   }>;
+  coverage?: {
+    targetExternalOffers?: number;
+    targetCoveragePercent?: number;
+    coveragePercent?: number;
+    externalOfferCount?: number;
+    achieved?: boolean;
+    freshOfferCount?: number;
+    staleOfferCount?: number;
+    lastRefreshedAt?: string;
+    routes?: Array<{
+      routeId: string;
+      externalOffers: number;
+      achieved: boolean;
+    }>;
+  };
+  rfqSuggested?: boolean;
 }
 
 export interface TransportRoute {
@@ -181,7 +227,18 @@ export interface CostBreakdown {
   portStorageBufferCad: number;
   batteryAndRepairsCad: number;
   totalAdditionalFeesCad: number;
+  cersFeeCad: number;
+  bscFeeCad: number;
+  narsaFeeCad: number;
+  totalComplianceFeesCad: number;
   customsTaxableValueCad: number;
+  customsFreightCad: number;
+  customsDutyCad: number;
+  statisticalTaxCad: number;
+  regionalLeviesCad: number;
+  parafiscalTaxCad: number;
+  ticCad: number;
+  vatCad: number;
   customsAndTaxesCad: number;
   customsValuationBasis: CustomsValuationBasis;
   customsDifferenceArgusCad: number;
@@ -190,6 +247,7 @@ export interface CostBreakdown {
   localCurrencyCode: 'MAD' | 'XOF';
   effectiveFxRate: number;
   baseFxRate: number;
+  customsAssessedFxRate: number;
 }
 
 export interface FxScenario {
@@ -260,7 +318,7 @@ export interface SimulationResult {
     optimistic: FxScenario;
   };
   marketComparison?: MarketComparison;
-  calculationStatus: 'indicative' | 'marketplace_rate' | 'carrier_quote';
+  calculationStatus: 'indicative' | 'marketplace_rate' | 'carrier_quote' | 'user_documented_quote';
   assumptions: string[];
 }
 
@@ -296,10 +354,23 @@ export interface GlobalReferenceConfig {
   fxRates: {
     CAD_to_MAD: number;
     CAD_to_XOF: number;
+    /** Immutable/versioned official customs assessment rates. */
+    customsAssessedCAD_to_MAD: number;
+    customsAssessedCAD_to_XOF: number;
+    customsRatesVersion: string;
+    /** Live market spot rates; only these are refreshed from the FX API. */
+    marketCAD_to_MAD: number;
+    marketCAD_to_XOF: number;
     defaultSpreadPercent: number;
     lastUpdated: string;
     isLive?: boolean;
     officialSourceUrl?: string;
+    providerUpdatedAt?: string | null;
+    nextUpdateAt?: string | null;
+    fetchedAt?: string;
+    cacheStatus?: 'live' | 'cached' | 'unavailable';
+    sourceName?: string;
+    errorMessage?: string;
   };
   quebecRegions: QuebecOriginRegion[];
   officialSources: OfficialSource[];

@@ -13,3 +13,9 @@
 - A transport price is confirmed only when it comes from a carrier tariff, official calculator, API, or a dated carrier quote.
 - When no carrier price is available, keep the calculation usable but label it as indicative and tell the user a quote is required.
 - Keep source names, verification dates, inclusions, and exclusions visible wherever a user could rely on a number.
+
+## Regulatory calculator conventions
+
+- Treat the imported regulatory/FX specification and its golden tests as the source of truth for eligibility, compliance fees, and tax formulas.
+- Keep live market/settlement FX separate from versioned customs-assessed FX; a live refresh must never overwrite a customs rate.
+- `src/` is the canonical calculator implementation. After changing shared types, defaults, prefill validation, or calculation logic, run `npm run sync:extension-engine` inside `marketplace-extension/` and validate both projects.

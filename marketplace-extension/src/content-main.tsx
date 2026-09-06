@@ -12,15 +12,22 @@ import { normalizeListing, type NormalizedInputs } from './normalize';
 import { calculateSimulation } from './engine/calculationEngine';
 import { DEFAULT_CONFIG } from './engine/defaultData';
 import { EXTENSION_ENGINE_VERSION } from './engine/version';
-import { fetchLiveFxRates } from './fx';
+import { applyLiveMarketRates, fetchLiveFxRates } from './fx';
 import { buildPrefillUrl } from './prefill';
 import { loadExtensionOptions } from './options';
 import { mountNode, mountOverlay, mountOverlaySkeleton, unmountOverlay } from './content';
 import { RejectionBlock } from './overlay-states';
 import type { DestinationCountry, GlobalReferenceConfig } from './engine/types';
+import { VerificationPanel, type VerificationValues } from './verification';
+import {
+  resolveYearMakeModel,
+  type FuelKind,
+  type VehicleResolution,
+} from './vehicle-data';
 
 let currentInputs: NormalizedInputs | null = null;
 let currentFxLive = false;
+let currentCalculationConfig: GlobalReferenceConfig = DEFAULT_CONFIG;
 let currentBaseUrl = 'http://localhost:3000';
 let currentDestination: DestinationCountry = 'senegal';
 let runToken = 0;
@@ -31,6 +38,25 @@ let lastSettleOk = false;
 let lastSettledId: string | null = null;
 
 const YEAR_IN_H1_RE = /(19[89]\d|20[0-2]\d)/;
+
+function normalizeListingFuel(value: string | null): FuelKind | null {
+  const text = value?.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase() ?? '';
+  if (/hybrid|hybride/.test(text)) return 'Hybrid';
+  if (/electric|electrique/.test(text)) return 'Electric';
+  if (/diesel/.test(text)) return 'Diesel';
+  if (/gasoline|essence|petrol/.test(text)) return 'Gasoline';
+  return null;
+}
+
+/** Only preselect an actual returned trim when its visible trim name appears
+ * in the listing title; otherwise the user must choose. */
+function findListingTrim(title: string, resolution: VehicleResolution) {
+  const titleFlat = title.toLowerCase().replace(/[^a-z0-9]/g, '');
+  return resolution.trimOptions.find((option) => {
+    const trimName = option.label.split('—')[0].trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+    return trimName.length >= 3 && titleFlat.includes(trimName);
+  }) ?? null;
+}
 
 /** true si un h1 du DOM porte déjà une année (titre d'annonce rendu). */
 function hasYearH1(): boolean {
@@ -163,60 +189,54 @@ async function runPipeline(listingId: string): Promise<void> {
     if (norm.warnings.length > 0) axcLog.debug('normalize warnings', norm.warnings);
     axcLog.debug('vehicle', { ...currentInputs.vehicle });
 
-    // FX live optionnel, fallback barèmes (pastille Référence).
-    let config: GlobalReferenceConfig = DEFAULT_CONFIG;
-    currentFxLive = false;
+    let resolution: VehicleResolution;
     try {
-      const live = await fetchLiveFxRates();
-      if (token !== runToken) return;
-      if (live.isLive) {
-        currentFxLive = true;
-        axcLog.debug('FX live', { MAD: live.CAD_to_MAD, XOF: live.CAD_to_XOF });
-        config = {
-          ...DEFAULT_CONFIG,
-          fxRates: { ...DEFAULT_CONFIG.fxRates, CAD_to_MAD: live.CAD_to_MAD, CAD_to_XOF: live.CAD_to_XOF, lastUpdated: live.lastUpdated, isLive: true },
-        };
-      } else {
-        axcLog.debug('FX fallback barèmes (hors ligne)');
-      }
+      // VIN stays local until the user explicitly presses the vPIC button.
+      resolution = await resolveYearMakeModel(
+        currentInputs.vehicle.year,
+        currentInputs.vehicle.brand,
+        currentInputs.vehicle.model,
+      );
     } catch (e) {
-      currentFxLive = false;
-      axcLog.warn('FX indisponible, barèmes locaux', e instanceof Error ? e.message : e);
+      resolution = {
+        source: 'manual',
+        year: currentInputs.vehicle.year,
+        make: currentInputs.vehicle.brand,
+        model: currentInputs.vehicle.model,
+        engineCc: null,
+        fuel: null,
+        trimOptions: [],
+        message: e instanceof Error
+          ? `${e.message} Verify engine and fuel manually.`
+          : 'Vehicle data unavailable. Verify engine and fuel manually.',
+      };
     }
-
-    const sim = calculateSimulation(
-      currentInputs.vehicle,
-      currentInputs.destination,
-      currentInputs.financing,
-      currentInputs.transport,
-      currentInputs.customs,
-      currentInputs.targetMarginPercent,
-      config,
-    );
     if (token !== runToken) return;
-
-    axcLog.info('calcul OK', {
-      landedCad: sim.breakdown.landedCostCad,
-      profitCad: sim.estimatedNetProfitCad,
-      eligible: sim.isEligible,
-      severity: sim.eligibilitySeverity,
-      fx: currentFxLive ? 'live' : 'reference',
-    });
-    mountOverlay({
-      sim,
-      raw,
-      fxLive: currentFxLive,
-      engineVersion: EXTENSION_ENGINE_VERSION,
-      onToggleCountry: (next) => {
-        void retoggle(next, raw);
-      },
-      onClose: () => unmountOverlay(),
-      onMinimize: () => undefined,
-      onComplete: (prefillUrl) => {
-        const target = prefillUrl || safePrefillUrl();
-        if (target) window.open(target, '_blank', 'noopener');
-      },
-    });
+    const listingTrim = findListingTrim(raw.titleH1, resolution);
+    const verifiedInitial: VerificationValues = {
+      destination: currentDestination,
+      year: resolution.year ?? currentInputs.vehicle.year,
+      make: resolution.make ?? currentInputs.vehicle.brand,
+      model: resolution.model ?? currentInputs.vehicle.model,
+      priceCad: currentInputs.vehicle.purchasePriceCad,
+      engineCc: resolution.engineCc ?? listingTrim?.engineCc ?? (
+        raw.engineLitres == null ? null : Math.round(raw.engineLitres * 1000)
+      ),
+      fuel: resolution.fuel ?? listingTrim?.fuel ?? normalizeListingFuel(raw.fuelRaw),
+      vehicleClassification: 'passenger',
+      weightKg: null,
+    };
+    mountNode(<VerificationPanel
+      raw={raw}
+      initial={verifiedInitial}
+      resolution={resolution}
+      onClose={() => unmountOverlay()}
+      onConfirm={(values) => {
+        void finishCalculation(token, listingId, dom.h1, raw, values);
+      }}
+    />, 'verification');
+    // La vérification est un état abouti : les mutations tardives du H1 ne
+    // doivent pas effacer les saisies de l'utilisateur.
     settle(listingId, dom.h1, true);
   } catch (e) {
     if (token !== runToken) return;
@@ -224,6 +244,80 @@ async function runPipeline(listingId: string): Promise<void> {
     mountRejection(e instanceof Error ? e.message : 'Analyse impossible.', null);
     settle(listingId, null, false);
   }
+}
+
+async function finishCalculation(
+  token: number,
+  listingId: string,
+  h1: string,
+  raw: RawListing,
+  values: VerificationValues,
+): Promise<void> {
+  currentDestination = values.destination;
+  const norm = normalizeListing(raw, {
+    destination: values.destination,
+    verifiedVehicle: {
+      year: values.year,
+      brand: values.make,
+      model: values.model,
+      purchasePriceCad: values.priceCad,
+      engineCc: values.engineCc ?? undefined,
+      fuelType: values.fuel ?? undefined,
+      steering: raw.steeringSide,
+      vehicleClassification: values.vehicleClassification,
+      grossVehicleWeightKg: values.weightKg ?? undefined,
+      classificationVerified: values.vehicleClassification !== 'passenger' || values.weightKg != null,
+    },
+  });
+  if (!norm.ok) {
+    mountRejection(norm.rejection.message, { code: norm.rejection.code, message: norm.rejection.message });
+    return;
+  }
+  currentInputs = norm.inputs;
+  mountOverlaySkeleton('Calcul de l’estimation…');
+
+  let config: GlobalReferenceConfig = DEFAULT_CONFIG;
+  currentFxLive = false;
+  try {
+    const live = await fetchLiveFxRates();
+    if (token !== runToken) return;
+    if (live.isLive) {
+      currentFxLive = true;
+      config = applyLiveMarketRates(DEFAULT_CONFIG, live);
+    }
+  } catch (e) {
+    axcLog.warn('FX indisponible, barèmes locaux', e instanceof Error ? e.message : e);
+  }
+  currentCalculationConfig = config;
+  const sim = calculateSimulation(
+    currentInputs.vehicle, currentInputs.destination, currentInputs.financing,
+    currentInputs.transport, currentInputs.customs, currentInputs.targetMarginPercent, config,
+  );
+  if (token !== runToken) return;
+  mountOverlay({
+    sim,
+    raw,
+    fxLive: currentFxLive,
+    engineVersion: EXTENSION_ENGINE_VERSION,
+    onToggleCountry: (next) => {
+      void retoggle(next, raw);
+    },
+    onClose: () => unmountOverlay(),
+    onMinimize: () => undefined,
+    onComplete: (prefillUrl) => {
+      const target = prefillUrl || safePrefillUrl();
+      if (target) window.open(target, '_blank', 'noopener');
+    },
+  });
+  axcLog.info('calcul OK', {
+    landedCad: sim.breakdown.landedCostCad,
+    profitCad: sim.estimatedNetProfitCad,
+    eligible: sim.isEligible,
+    steering: raw.steeringSide,
+    engineCc: values.engineCc,
+    fuel: values.fuel,
+  });
+  settle(listingId, h1, true);
 }
 
 /** Mémorise le dernier `{id}::{h1}` traité : un changement de h1 ultérieur
@@ -253,10 +347,15 @@ async function retoggle(next: DestinationCountry, raw: RawListing): Promise<void
   currentDestination = next;
   const norm = normalizeListing(raw, { destination: next });
   if (!norm.ok || !currentInputs) return;
-  currentInputs = { ...norm.inputs, financing: currentInputs.financing, targetMarginPercent: currentInputs.targetMarginPercent };
+  currentInputs = {
+    ...norm.inputs,
+    vehicle: currentInputs.vehicle,
+    financing: currentInputs.financing,
+    targetMarginPercent: currentInputs.targetMarginPercent,
+  };
   const sim = calculateSimulation(
     currentInputs.vehicle, currentInputs.destination, currentInputs.financing,
-    currentInputs.transport, currentInputs.customs, currentInputs.targetMarginPercent, DEFAULT_CONFIG,
+    currentInputs.transport, currentInputs.customs, currentInputs.targetMarginPercent, currentCalculationConfig,
   );
   mountOverlay({
     sim, raw, fxLive: currentFxLive, engineVersion: EXTENSION_ENGINE_VERSION,

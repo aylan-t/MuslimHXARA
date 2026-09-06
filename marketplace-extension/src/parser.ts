@@ -32,6 +32,11 @@ export interface RawListing {
   yearInBlock: number | null;
   blockFormat: 'apropos' | 'renseignements' | 'none';
   descriptionText: string;
+  /** VIN ISO 3779 trouvé dans le titre/texte, en majuscules. */
+  vin: string | null;
+  /** Véhicules canadiens supposés LHD, sauf mention JDM/RHD explicite. */
+  steeringSide: 'LHD' | 'RHD';
+  steeringEvidence: string | null;
   isLeaseSuspect: boolean;
   rejection: null | {
     code: 'USD_PRICE' | 'LEASE_PRICE' | 'NO_PRICE' | 'NO_YEAR' | 'NOT_VEHICLE';
@@ -114,6 +119,12 @@ const LEASE_KEYWORDS_RE =
 
 /** Conteneur vehicule FR + EN. */
 const APROPOS_RE = /À propos de ce véhicule|About this vehicle/i;
+
+/** I, O et Q sont exclus des VIN. Les bornes évitent de prendre 17 caractères
+ * au milieu d'un identifiant plus long. */
+const VIN_RE = /(?:^|[^A-Z0-9])([A-HJ-NPR-Z0-9]{17})(?=$|[^A-Z0-9])/i;
+const RHD_RE =
+  /\b(RHD|JDM|right[\s-]*hand[\s-]*drive|right[\s-]*hand steering|conduite à droite|volant à droite)\b/i;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -293,6 +304,21 @@ function extractEngine(bodyText: string): number | null {
   return value;
 }
 
+export function extractVin(text: string): string | null {
+  const match = VIN_RE.exec(text.toUpperCase());
+  return match?.[1] ?? null;
+}
+
+function detectSteering(text: string): {
+  steeringSide: RawListing['steeringSide'];
+  steeringEvidence: string | null;
+} {
+  const match = RHD_RE.exec(text);
+  return match
+    ? { steeringSide: 'RHD', steeringEvidence: match[0] }
+    : { steeringSide: 'LHD', steeringEvidence: null };
+}
+
 // ---------------------------------------------------------------------------
 // parseListing
 // ---------------------------------------------------------------------------
@@ -317,6 +343,8 @@ export function parseListing(input: ListingDomLike): RawListing {
   const mileageKm = extractMileage(bodyText);
   const fuelRaw = extractFuel(bodyText);
   const engineLitres = extractEngine(bodyText);
+  const vin = extractVin(`${h1}\n${bodyText}`);
+  const steering = detectSteering(`${h1}\n${bodyText}`);
 
   // Rejet lease §5.2 : prix < 1000 ET (km < 60000 OU mot-cle location/transfert).
   const isLeaseSuspect =
@@ -378,6 +406,8 @@ export function parseListing(input: ListingDomLike): RawListing {
     yearInBlock,
     blockFormat,
     descriptionText: bodyText,
+    vin,
+    ...steering,
     isLeaseSuspect,
     rejection,
   };

@@ -3,6 +3,9 @@ export type DestinationCountry = 'senegal' | 'maroc';
 export type VehicleCategory = 'citadine' | 'berline' | 'suv' | 'camionnette';
 export type VehicleCondition = 'excellent' | 'tres_bon' | 'bon' | 'moyen';
 export type VehicleSource = 'particulier' | 'concessionnaire' | 'encan';
+export type FuelType = 'Gasoline' | 'Diesel' | 'Hybrid' | 'Electric';
+export type SteeringLayout = 'LHD' | 'RHD';
+export type VehicleClassification = 'passenger' | 'commercial_utility';
 
 export interface QuebecOriginRegion {
   id: string;
@@ -33,6 +36,13 @@ export interface Vehicle {
   year: number;
   mileageKm: number;
   purchasePriceCad: number;
+  engineCc: number;
+  fuelType: FuelType;
+  steering: SteeringLayout;
+  isJdm?: boolean;
+  vehicleClassification: VehicleClassification;
+  grossVehicleWeightKg: number;
+  classificationVerified: boolean;
   category: VehicleCategory;
   condition: VehicleCondition;
   source: VehicleSource;
@@ -49,6 +59,12 @@ export interface PreloadedVehicle {
   model: string;
   year: number;
   purchasePriceCad: number;
+  engineCc: number;
+  fuelType: FuelType;
+  steering: SteeringLayout;
+  vehicleClassification: VehicleClassification;
+  grossVehicleWeightKg: number;
+  classificationVerified: boolean;
   estimatedArgusCustomsCad: number; // Cote douanière officielle estimée
   mileageKm: number;
   category: VehicleCategory;
@@ -209,7 +225,18 @@ export interface CostBreakdown {
   portStorageBufferCad: number;
   batteryAndRepairsCad: number;
   totalAdditionalFeesCad: number;
+  cersFeeCad: number;
+  bscFeeCad: number;
+  narsaFeeCad: number;
+  totalComplianceFeesCad: number;
   customsTaxableValueCad: number;
+  customsFreightCad: number;
+  customsDutyCad: number;
+  statisticalTaxCad: number;
+  regionalLeviesCad: number;
+  parafiscalTaxCad: number;
+  ticCad: number;
+  vatCad: number;
   customsAndTaxesCad: number;
   customsValuationBasis: CustomsValuationBasis;
   customsDifferenceArgusCad: number;
@@ -218,6 +245,7 @@ export interface CostBreakdown {
   localCurrencyCode: 'MAD' | 'XOF';
   effectiveFxRate: number;
   baseFxRate: number;
+  customsAssessedFxRate: number;
 }
 
 export interface FxScenario {
@@ -324,6 +352,13 @@ export interface GlobalReferenceConfig {
   fxRates: {
     CAD_to_MAD: number;
     CAD_to_XOF: number;
+    /** Immutable/versioned official customs assessment rates. */
+    customsAssessedCAD_to_MAD: number;
+    customsAssessedCAD_to_XOF: number;
+    customsRatesVersion: string;
+    /** Live market spot rates; only these are refreshed from the FX API. */
+    marketCAD_to_MAD: number;
+    marketCAD_to_XOF: number;
     defaultSpreadPercent: number;
     lastUpdated: string;
     isLive?: boolean;

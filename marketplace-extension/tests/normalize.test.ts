@@ -23,11 +23,14 @@ function baseRaw(overrides: Partial<RawListing> = {}): RawListing {
     city: 'Laval',
     mileageKm: 240000,
     fuelRaw: 'Essence',
-    engineLitres: null,
+    engineLitres: 2,
     yearInTitle: 2014,
     yearInBlock: null,
     blockFormat: 'apropos',
     descriptionText: 'BMW 328i xdrive, très propre, entretien à jour.',
+    vin: null,
+    steeringSide: 'LHD',
+    steeringEvidence: null,
     isLeaseSuspect: false,
     rejection: null,
     ...overrides,
@@ -47,6 +50,13 @@ describe('normalizeListing — cas MVP BMW 2014 Laval 5 500 $ (§4.1 exact)', ()
       year: 2014,
       mileageKm: 240000,
       purchasePriceCad: 5500,
+      engineCc: 2000,
+      fuelType: 'Gasoline',
+      steering: 'LHD',
+      isJdm: false,
+      vehicleClassification: 'passenger',
+      grossVehicleWeightKg: 2000,
+      classificationVerified: true,
       category: 'suv', // défaut + flag « supposée »
       condition: 'bon',
       source: 'particulier',
@@ -173,7 +183,11 @@ describe('normalizeListing — champs informatifs sans impact', () => {
     expect(res.ok).toBe(true);
     if (!res.ok) return;
     expect('engineLitres' in res.inputs.vehicle).toBe(false);
-    expect('fuelType' in res.inputs.vehicle).toBe(false);
+    // Le contrat moteur synchronisé exige désormais ces champs; ils sont
+    // explicitement présents même lorsque le parser a neutralisé une valeur
+    // de cylindrée invalide.
+    expect(res.inputs.vehicle.engineCc).toBe(0);
+    expect(res.inputs.vehicle.fuelType).toBe('Gasoline');
   });
 
   it('« Carburant » ou fuel absent → sans impact (CR-V / Santa Fe)', () => {
@@ -295,7 +309,20 @@ describe('normalizeListing — destination param (défaut senegal)', () => {
 // ---------------------------------------------------------------------------
 
 function sampleInputs(): { inputs: NormalizedInputs; meta: { listingId: string; listingUrl: string; listingTitle: string; engineVersion: string } } {
-  const res = normalizeListing(baseRaw());
+  const res = normalizeListing(baseRaw(), {
+    verifiedVehicle: {
+      year: 2014,
+      brand: 'Bmw',
+      model: '3 Series',
+      purchasePriceCad: 5500,
+      engineCc: 2000,
+      fuelType: 'Gasoline',
+      steering: 'LHD',
+      vehicleClassification: 'passenger',
+      grossVehicleWeightKg: 2000,
+      classificationVerified: true,
+    },
+  });
   if (!res.ok) throw new Error('fixture BMW invalide');
   return {
     inputs: res.inputs,
@@ -351,7 +378,20 @@ describe('prefill — buildPrefillUrl / parsePrefill (même code des deux côté
   });
 
   it('diacritiques préservées dans le roundtrip (ex. « Mont-Royal »)', () => {
-    const res = normalizeListing(baseRaw({ city: 'Montréal', locationRaw: 'sur Montréal, QC' }));
+    const res = normalizeListing(baseRaw({ city: 'Montréal', locationRaw: 'sur Montréal, QC' }), {
+      verifiedVehicle: {
+        year: 2014,
+        brand: 'Bmw',
+        model: '3 Series',
+        purchasePriceCad: 5500,
+        engineCc: 2000,
+        fuelType: 'Gasoline',
+        steering: 'LHD',
+        vehicleClassification: 'passenger',
+        grossVehicleWeightKg: 2000,
+        classificationVerified: true,
+      },
+    });
     if (!res.ok) throw new Error('fixture invalide');
     const url = buildPrefillUrl('http://localhost:3000', res.inputs, {
       ...sampleInputs().meta,

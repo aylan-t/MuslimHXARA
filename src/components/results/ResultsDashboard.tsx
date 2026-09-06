@@ -83,6 +83,10 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
               {simulation.vehicle.brand} {simulation.vehicle.model} ({simulation.vehicle.year}) vers {destName}
             </span>
           </div>
+          <p className="text-xs text-white/90">
+            {simulation.vehicle.engineCc.toLocaleString('fr-CA')} cm³ · {simulation.vehicle.fuelType} · {simulation.vehicle.steering}
+            {simulation.vehicle.isJdm ? ' · JDM déclaré' : ''}
+          </p>
           <h1 className="text-xl sm:text-2xl font-black tracking-tight leading-tight">
             {isProfit
               ? `Cette voiture peut te rapporter environ ${simulation.estimatedNetProfitCad.toLocaleString('fr-CA')} $ CA de profit net.`

@@ -58,8 +58,9 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, onLoadD
                  <RefreshCw className={`h-4 w-4 ${isRefreshingRates ? 'animate-spin' : ''}`} />
                </button>
              </div>
-             <div className="mt-2">1 CAD = {config.fxRates.CAD_to_MAD.toFixed(2)} MAD</div>
-             <div>1 CAD = {config.fxRates.CAD_to_XOF.toFixed(1)} XOF</div>
+              <div className="mt-2">1 CAD = {(config.fxRates.marketCAD_to_MAD ?? config.fxRates.CAD_to_MAD).toFixed(2)} MAD</div>
+              <div>1 CAD = {(config.fxRates.marketCAD_to_XOF ?? config.fxRates.CAD_to_XOF).toFixed(1)} XOF</div>
+              <div className="mt-1 text-[10px] text-slate-400">Taux douaniers figés : MAD {config.fxRates.customsAssessedCAD_to_MAD.toFixed(2)} · XOF {config.fxRates.customsAssessedCAD_to_XOF.toFixed(1)}</div>
              <div className={`mt-2 text-[10px] ${config.fxRates.isLive ? 'text-emerald-200' : 'text-amber-200'}`}>
                {config.fxRates.isLive ? 'Dernière donnée publiée par l’API :' : 'API indisponible — taux précédent :'}
                {config.fxRates.providerUpdatedAt ? ` ${new Date(config.fxRates.providerUpdatedAt).toLocaleString('fr-CA')}` : ' date inconnue'}

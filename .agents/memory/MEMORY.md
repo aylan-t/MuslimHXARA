@@ -1,0 +1,1 @@
+- [Extension engine synchronization](extension-engine-sync.md) — regulatory changes must update sync safeguards and both test suites together.

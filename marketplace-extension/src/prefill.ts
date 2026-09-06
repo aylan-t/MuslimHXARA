@@ -1,5 +1,5 @@
 // AUTO-GÉNÉRÉ par scripts/sync-engine.mjs — NE PAS ÉDITER.
-// Source : src/services/prefill.ts · EXTENSION_ENGINE_VERSION=89cf23b1def5a0e1ef9bff58e679eff3d3db2ff9 · sync=2026-09-06T06:13:47.247Z
+// Source : src/services/prefill.ts · EXTENSION_ENGINE_VERSION=d72cb8c705d41701f96a343c27e78c3e0ae75a6a · sync=2026-09-06T17:07:37.459Z
 import type {
   CustomsSelection,
   DestinationCountry,
@@ -77,6 +77,22 @@ function assertValidPayload(value: unknown): asserts value is PrefillPayload {
   if (!isFiniteNumber(vehicle.purchasePriceCad) || vehicle.purchasePriceCad <= 0) {
     throw invalid('vehicle.purchasePriceCad');
   }
+  if (!isFiniteNumber(vehicle.engineCc) || vehicle.engineCc <= 0) {
+    throw invalid('vehicle.engineCc');
+  }
+  if (!['Gasoline', 'Diesel', 'Hybrid', 'Electric'].includes(String(vehicle.fuelType))) {
+    throw invalid('vehicle.fuelType');
+  }
+  if (vehicle.steering !== 'LHD' && vehicle.steering !== 'RHD') {
+    throw invalid('vehicle.steering');
+  }
+  if (!isFiniteNumber(vehicle.grossVehicleWeightKg) || vehicle.grossVehicleWeightKg <= 0) {
+    throw invalid('vehicle.grossVehicleWeightKg');
+  }
+  if (vehicle.vehicleClassification !== 'passenger' && vehicle.vehicleClassification !== 'commercial_utility') {
+    throw invalid('vehicle.vehicleClassification');
+  }
+  if (typeof vehicle.classificationVerified !== 'boolean') throw invalid('vehicle.classificationVerified');
   if (!isFiniteNumber(vehicle.mileageKm) || vehicle.mileageKm < 0) {
     throw invalid('vehicle.mileageKm');
   }

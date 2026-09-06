@@ -1,5 +1,5 @@
 // AUTO-GÉNÉRÉ par scripts/sync-engine.mjs — NE PAS ÉDITER.
-// Source : src/data/defaultData.ts · EXTENSION_ENGINE_VERSION=89cf23b1def5a0e1ef9bff58e679eff3d3db2ff9 · sync=2026-09-06T06:13:47.247Z
+// Source : src/data/defaultData.ts · EXTENSION_ENGINE_VERSION=d72cb8c705d41701f96a343c27e78c3e0ae75a6a · sync=2026-09-06T17:07:37.459Z
 import { GlobalReferenceConfig, PreloadedVehicle, Vehicle, QuebecOriginRegion, OfficialSource } from './types';
 
 export const QUEBEC_REGIONS: QuebecOriginRegion[] = [
@@ -95,7 +95,7 @@ export const OFFICIAL_SOURCES: OfficialSource[] = [
     institution: 'Administration des Douanes et Impôts Indirects (ADII Maroc)',
     countryCode: 'MA',
     url: 'https://www.douane.gov.ma/',
-    description: 'Système BADR : Droits d\'importation, TVA et conditions d\'abattement de 90% pour les retraités MRE de 60 ans+.',
+    description: 'Système BADR : droits d\'importation, TVA et conditions d\'abattement de 85% pour les retraités MRE de 60 ans+.',
     legalReference: 'Circulaire ADII n° 5980/311 relative au dédouanement des véhicules de tourisme MRE',
     lastVerified: '2026-01-15'
   },
@@ -139,6 +139,7 @@ export const PRELOADED_VEHICLES: PreloadedVehicle[] = [
     model: 'RAV4',
     year: 2018,
     purchasePriceCad: 14200,
+    engineCc: 2487, fuelType: 'Gasoline', steering: 'LHD', vehicleClassification: 'passenger', grossVehicleWeightKg: 1700, classificationVerified: true,
     estimatedArgusCustomsCad: 16800, // Cote douanière officielle
     mileageKm: 115000,
     category: 'suv',
@@ -152,6 +153,7 @@ export const PRELOADED_VEHICLES: PreloadedVehicle[] = [
     model: 'Corolla',
     year: 2017,
     purchasePriceCad: 10500,
+    engineCc: 1798, fuelType: 'Gasoline', steering: 'LHD', vehicleClassification: 'passenger', grossVehicleWeightKg: 1400, classificationVerified: true,
     estimatedArgusCustomsCad: 12200,
     mileageKm: 130000,
     category: 'berline',
@@ -165,6 +167,7 @@ export const PRELOADED_VEHICLES: PreloadedVehicle[] = [
     model: 'CR-V',
     year: 2019,
     purchasePriceCad: 16800,
+    engineCc: 1498, fuelType: 'Gasoline', steering: 'LHD', vehicleClassification: 'passenger', grossVehicleWeightKg: 1550, classificationVerified: true,
     estimatedArgusCustomsCad: 19500,
     mileageKm: 95000,
     category: 'suv',
@@ -178,6 +181,7 @@ export const PRELOADED_VEHICLES: PreloadedVehicle[] = [
     model: 'Civic',
     year: 2018,
     purchasePriceCad: 11200,
+    engineCc: 1996, fuelType: 'Gasoline', steering: 'LHD', vehicleClassification: 'passenger', grossVehicleWeightKg: 1350, classificationVerified: true,
     estimatedArgusCustomsCad: 13000,
     mileageKm: 110000,
     category: 'berline',
@@ -191,6 +195,7 @@ export const PRELOADED_VEHICLES: PreloadedVehicle[] = [
     model: 'Tucson',
     year: 2018,
     purchasePriceCad: 12900,
+    engineCc: 1999, fuelType: 'Gasoline', steering: 'LHD', vehicleClassification: 'passenger', grossVehicleWeightKg: 1600, classificationVerified: true,
     estimatedArgusCustomsCad: 15200,
     mileageKm: 105000,
     category: 'suv',
@@ -204,6 +209,7 @@ export const PRELOADED_VEHICLES: PreloadedVehicle[] = [
     model: 'Escape',
     year: 2017,
     purchasePriceCad: 9800,
+    engineCc: 1499, fuelType: 'Gasoline', steering: 'LHD', vehicleClassification: 'passenger', grossVehicleWeightKg: 1550, classificationVerified: true,
     estimatedArgusCustomsCad: 11800,
     mileageKm: 125000,
     category: 'suv',
@@ -217,6 +223,7 @@ export const PRELOADED_VEHICLES: PreloadedVehicle[] = [
     model: 'Highlander',
     year: 2017,
     purchasePriceCad: 21500,
+    engineCc: 3456, fuelType: 'Gasoline', steering: 'LHD', vehicleClassification: 'passenger', grossVehicleWeightKg: 2100, classificationVerified: true,
     estimatedArgusCustomsCad: 24500,
     mileageKm: 135000,
     category: 'suv',
@@ -230,6 +237,7 @@ export const PRELOADED_VEHICLES: PreloadedVehicle[] = [
     model: 'Rogue',
     year: 2018,
     purchasePriceCad: 11400,
+    engineCc: 2488, fuelType: 'Gasoline', steering: 'LHD', vehicleClassification: 'passenger', grossVehicleWeightKg: 1600, classificationVerified: true,
     estimatedArgusCustomsCad: 13500,
     mileageKm: 118000,
     category: 'suv',
@@ -243,6 +251,7 @@ export const PRELOADED_VEHICLES: PreloadedVehicle[] = [
     model: 'CX-5',
     year: 2018,
     purchasePriceCad: 13600,
+    engineCc: 2488, fuelType: 'Gasoline', steering: 'LHD', vehicleClassification: 'passenger', grossVehicleWeightKg: 1600, classificationVerified: true,
     estimatedArgusCustomsCad: 15800,
     mileageKm: 108000,
     category: 'suv',
@@ -256,6 +265,7 @@ export const PRELOADED_VEHICLES: PreloadedVehicle[] = [
     model: 'Sportage',
     year: 2019,
     purchasePriceCad: 13100,
+    engineCc: 1999, fuelType: 'Gasoline', steering: 'LHD', vehicleClassification: 'passenger', grossVehicleWeightKg: 1600, classificationVerified: true,
     estimatedArgusCustomsCad: 15000,
     mileageKm: 98000,
     category: 'suv',
@@ -268,6 +278,11 @@ export const DEFAULT_CONFIG: GlobalReferenceConfig = {
   fxRates: {
     CAD_to_MAD: 7.35,
     CAD_to_XOF: 440.0,
+    customsAssessedCAD_to_MAD: 7.35,
+    customsAssessedCAD_to_XOF: 440.0,
+    customsRatesVersion: 'ADII/BAM & DGDDI weekly assessment 2026-03-01',
+    marketCAD_to_MAD: 7.35,
+    marketCAD_to_XOF: 440.0,
     defaultSpreadPercent: 2.5,
     lastUpdated: '2026-03-01',
     isLive: false,
@@ -314,7 +329,7 @@ export const DEFAULT_CONFIG: GlobalReferenceConfig = {
     senegal: {
       maxAgeYearsTourism: 10,
       maxAgeYearsTrucks: 15,
-      taxRatePercent: 44.5,
+      taxRatePercent: 44.786,
       legalBasis: 'Décret n° 2025-1845 du 24 octobre 2025 (limite stricte 10 ans)',
       lastUpdated: '2026-01-15',
       officialSourceUrl: 'https://www.douanes.sn/'
@@ -323,9 +338,9 @@ export const DEFAULT_CONFIG: GlobalReferenceConfig = {
       standardImportRatePercent: 17.5,
       vatRatePercent: 20.0,
       parafiscalRatePercent: 0.25,
-      mreMaxAgeYears: 5,
-      mreMaxDiscountPercent: 90.0,
-      legalWarning: 'AVERTISSEMENT LÉGAL : L\'importation commerciale classique au Maroc est strictement encadrée et soumise à agrément. Le régime avantageux s\'applique principalement aux Marocains Résidant à l\'Étranger (MRE) de 60 ans et plus (véhicule de 5 ans maximum, abattement de 90%). Vérifiez obligatoirement auprès des douanes marocaines avant achat.',
+      mreMaxAgeYears: 10,
+      mreMaxDiscountPercent: 85.0,
+      legalWarning: 'Le régime standard marocain refuse les véhicules de 5 ans ou plus. Le régime retraité MRE accepte jusqu’à 10 ans et applique un abattement de 85% au droit d’importation, sous réserve de validation documentaire.',
       lastUpdated: '2026-01-15',
       officialSourceUrl: 'https://www.douane.gov.ma/'
     }
@@ -617,6 +632,12 @@ export const DEMO_VEHICLE: Vehicle = {
   model: PRELOADED_VEHICLES[0].model,
   year: PRELOADED_VEHICLES[0].year,
   purchasePriceCad: PRELOADED_VEHICLES[0].purchasePriceCad,
+  engineCc: PRELOADED_VEHICLES[0].engineCc,
+  fuelType: PRELOADED_VEHICLES[0].fuelType,
+  steering: 'LHD',
+  vehicleClassification: PRELOADED_VEHICLES[0].vehicleClassification,
+  grossVehicleWeightKg: PRELOADED_VEHICLES[0].grossVehicleWeightKg,
+  classificationVerified: true,
   mileageKm: PRELOADED_VEHICLES[0].mileageKm,
   category: PRELOADED_VEHICLES[0].category,
   condition: PRELOADED_VEHICLES[0].condition,

@@ -29,6 +29,9 @@ export interface RawListing {
   yearInBlock: number | null;
   blockFormat: 'apropos' | 'renseignements' | 'none';
   descriptionText: string;
+  vin: string | null;
+  steeringSide: 'LHD' | 'RHD';
+  steeringEvidence: string | null;
   isLeaseSuspect: boolean;
   rejection: null | {
     code: 'USD_PRICE' | 'LEASE_PRICE' | 'NO_PRICE' | 'NO_YEAR' | 'NOT_VEHICLE';
@@ -40,6 +43,8 @@ export type DestinationCountry = 'senegal' | 'maroc';
 export type VehicleCategory = 'citadine' | 'berline' | 'suv' | 'camionnette';
 export type VehicleCondition = 'excellent' | 'tres_bon' | 'bon' | 'moyen';
 export type VehicleSource = 'particulier' | 'concessionnaire' | 'encan';
+export type FuelType = 'Gasoline' | 'Diesel' | 'Hybrid' | 'Electric';
+export type SteeringLayout = 'LHD' | 'RHD';
 export type FinancingMethod = 'virement_bancaire' | 'plateforme_transfert' | 'interac_autre';
 export type CustomsValuationBasis = 'invoice' | 'argus_official';
 
@@ -49,6 +54,13 @@ export interface Vehicle {
   year: number;
   mileageKm: number;
   purchasePriceCad: number;
+  engineCc: number;
+  fuelType: FuelType;
+  steering: SteeringLayout;
+  isJdm?: boolean;
+  vehicleClassification: 'passenger' | 'commercial_utility';
+  grossVehicleWeightKg: number;
+  classificationVerified: boolean;
   category: VehicleCategory;
   condition: VehicleCondition;
   source: VehicleSource;
@@ -140,6 +152,19 @@ export interface NormalizeOptions {
    * (La persistance du dernier choix via chrome.storage.local sera gérée par AGENT-05.)
    */
   destination?: DestinationCountry;
+  /** Valeurs confirmées dans l'étape de vérification rapide. */
+  verifiedVehicle?: {
+    year: number;
+    brand: string;
+    model: string;
+    purchasePriceCad: number;
+    engineCc?: number;
+    fuelType?: FuelType;
+    steering?: SteeringLayout;
+    vehicleClassification?: 'passenger' | 'commercial_utility';
+    grossVehicleWeightKg?: number;
+    classificationVerified?: boolean;
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -157,6 +182,8 @@ const MAX_YEAR = 2027;
 const CATEGORY_ASSUMED_WARNING = 'Catégorie supposée (suv par défaut) — à vérifier dans l’annonce.';
 const ACCIDENT_HISTORY_WARNING =
   'Historique d’accident / VGA mentionné dans l’annonce — état à vérifier (informatif, calcul inchangé).';
+const RHD_WARNING =
+  'Mention JDM/RHD détectée — volant à droite à vérifier avant export.';
 
 // ---------------------------------------------------------------------------
 // Utilitaires texte
@@ -174,6 +201,16 @@ function flatCity(s: string): string {
 function capitalize(token: string): string {
   if (!token) return token;
   return token.charAt(0).toUpperCase() + token.slice(1).toLowerCase();
+}
+
+function normalizeFuelType(raw: string | null): FuelType {
+  const text = stripAccents(raw ?? '').toLowerCase();
+  if (/hybrid|hybride/.test(text)) return 'Hybrid';
+  if (/electric|electrique/.test(text)) return 'Electric';
+  if (/diesel/.test(text)) return 'Diesel';
+  // This provisional value cannot reach calculation: the verification UI
+  // requires an explicit fuel choice when Marketplace did not provide one.
+  return 'Gasoline';
 }
 
 // ---------------------------------------------------------------------------
@@ -389,7 +426,7 @@ export function normalizeListing(raw: RawListing, opts?: NormalizeOptions): Norm
       warnings: [],
     };
   }
-  const purchasePriceCad = raw.priceValue;
+  const purchasePriceCad = opts?.verifiedVehicle?.purchasePriceCad ?? raw.priceValue;
   if (purchasePriceCad == null || !Number.isFinite(purchasePriceCad) || purchasePriceCad <= 0) {
     return {
       ok: false,
@@ -399,7 +436,10 @@ export function normalizeListing(raw: RawListing, opts?: NormalizeOptions): Norm
   }
 
   // 3. Marque / modèle depuis le H1.
-  const brandModel = parseBrandModel(raw.titleH1);
+  const verified = opts?.verifiedVehicle;
+  const brandModel = verified?.brand.trim() && verified.model.trim()
+    ? { brand: verified.brand.trim(), model: verified.model.trim() }
+    : parseBrandModel(raw.titleH1);
   if (!brandModel) {
     return {
       ok: false,
@@ -413,7 +453,9 @@ export function normalizeListing(raw: RawListing, opts?: NormalizeOptions): Norm
 
   // 4. Année : titre sinon bloc (1980–2027) sinon NO_YEAR.
   const year =
-    raw.yearInTitle != null && raw.yearInTitle >= MIN_YEAR && raw.yearInTitle <= MAX_YEAR
+    verified?.year != null && verified.year >= MIN_YEAR && verified.year <= MAX_YEAR
+      ? verified.year
+      : raw.yearInTitle != null && raw.yearInTitle >= MIN_YEAR && raw.yearInTitle <= MAX_YEAR
       ? raw.yearInTitle
       : raw.yearInBlock != null && raw.yearInBlock >= MIN_YEAR && raw.yearInBlock <= MAX_YEAR
         ? raw.yearInBlock
@@ -441,6 +483,7 @@ export function normalizeListing(raw: RawListing, opts?: NormalizeOptions): Norm
   if (detectAccidentHistory(raw.titleH1, raw.descriptionText)) {
     warnings.push(ACCIDENT_HISTORY_WARNING);
   }
+  if (raw.steeringSide === 'RHD') warnings.push(RHD_WARNING);
 
   const vehicle: Vehicle = {
     brand: brandModel.brand,
@@ -448,6 +491,17 @@ export function normalizeListing(raw: RawListing, opts?: NormalizeOptions): Norm
     year,
     mileageKm,
     purchasePriceCad,
+    engineCc: verified?.engineCc != null && verified.engineCc > 0
+      ? Math.round(verified.engineCc)
+      : Math.round((raw.engineLitres ?? 0) * 1000),
+    fuelType: verified?.fuelType ?? normalizeFuelType(raw.fuelRaw),
+    steering: verified?.steering ?? raw.steeringSide,
+    isJdm: (verified?.steering ?? raw.steeringSide) === 'RHD',
+    vehicleClassification: verified?.vehicleClassification ?? 'passenger',
+    grossVehicleWeightKg: verified?.grossVehicleWeightKg != null && verified.grossVehicleWeightKg > 0
+      ? Math.round(verified.grossVehicleWeightKg)
+      : 2000,
+    classificationVerified: verified?.classificationVerified ?? true,
     category,
     condition: 'bon',
     source: 'particulier',

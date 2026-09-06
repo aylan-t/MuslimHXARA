@@ -25,11 +25,22 @@ export function checkEligibility(
   config: GlobalReferenceConfig
 ): { isEligible: boolean; severity: 'success' | 'warning' | 'error'; message: string } {
   const age = CURRENT_YEAR - vehicle.year;
-  const isTruck = vehicle.category === 'camionnette';
   const ageLabel = age <= 0 ? "moins d'un an" : `${age} an(s)`;
 
+  if (vehicle.steering === 'RHD' || vehicle.isJdm) {
+    return {
+      isEligible: false,
+      severity: 'error',
+      message: `VÉHICULE NON IMPORTABLE : la conduite à droite (RHD), notamment les imports JDM, n’est pas admise sur les corridors Sénégal et Maroc. Seuls les véhicules à conduite à gauche (LHD) sont acceptés.`
+    };
+  }
+
   if (country === 'senegal') {
-    const maxAge = isTruck
+    if (!vehicle.classificationVerified || vehicle.grossVehicleWeightKg <= 0) {
+      return { isEligible: false, severity: 'error', message: 'CLASSIFICATION DOUANIÈRE À CONFIRMER : indiquez et vérifiez la classe du véhicule et son poids total en charge avant de déterminer son admissibilité au Sénégal.' };
+    }
+    const isHeavy = vehicle.grossVehicleWeightKg > 3500;
+    const maxAge = isHeavy
       ? config.customsRules.senegal.maxAgeYearsTrucks
       : config.customsRules.senegal.maxAgeYearsTourism;
 
@@ -37,7 +48,7 @@ export function checkEligibility(
       return {
         isEligible: false,
         severity: 'error',
-        message: `VÉHICULE NON IMPORTABLE AU SÉNÉGAL : Ce véhicule a ${ageLabel}. Selon le décret officiel du 24 octobre 2025 (n° 2025-1845), la limite légale stricte est de ${maxAge} ans (année minimum autorisée : ${CURRENT_YEAR - maxAge}). Tout véhicule plus ancien est refoulé sans dédouanement au port de Dakar.`
+        message: `VÉHICULE NON IMPORTABLE AU SÉNÉGAL : Ce véhicule a ${ageLabel}. Selon le décret officiel du 24 octobre 2025, la limite applicable aux véhicules ${isHeavy ? 'lourds (> 3,5 t)' : 'légers / passagers (≤ 3,5 t)'} est de ${maxAge} ans (année minimum : ${CURRENT_YEAR - maxAge}).`
       };
     }
 
@@ -57,6 +68,12 @@ export function checkEligibility(
   }
 
   // Maroc
+  if (!vehicle.classificationVerified) {
+    return { isEligible: false, severity: 'error', message: 'CLASSIFICATION DOUANIÈRE À CONFIRMER : la classe du véhicule doit être vérifiée avant l’importation au Maroc.' };
+  }
+  if (vehicle.vehicleClassification === 'commercial_utility') {
+    return { isEligible: false, severity: 'error', message: 'CLASSIFICATION MANUELLE REQUISE AU MAROC : les utilitaires commerciaux ne relèvent pas des seuils passagers/MRE du guide. Obtenez le classement douanier et l’autorisation applicables avant achat.' };
+  }
   const isMRE = customs.moroccoOptions?.isMRE ?? false;
   if (isMRE) {
     const maxMreAge = config.customsRules.morocco.mreMaxAgeYears;
@@ -64,7 +81,7 @@ export function checkEligibility(
       return {
         isEligible: false,
         severity: 'error',
-        message: `NON ÉLIGIBLE AU RÉGIME MRE : L'abattement préférentiel MRE de 90% exige impérativement un véhicule de ${maxMreAge} ans maximum (année ${CURRENT_YEAR - maxMreAge} ou plus récente). Ce véhicule a ${ageLabel}.`
+        message: `NON ÉLIGIBLE AU RÉGIME MRE : le régime retraité MRE accepte un véhicule de ${maxMreAge} ans maximum. Ce véhicule a ${ageLabel}.`
       };
     }
     const hasConfirmedConditions = Boolean(
@@ -86,11 +103,18 @@ export function checkEligibility(
     };
   }
 
-  // Maroc régime commercial / standard
+  // Maroc régime standard : un véhicule ayant exactement 5 ans est déjà refusé.
+  if (age >= 5) {
+    return {
+      isEligible: false,
+      severity: 'error',
+      message: `VÉHICULE NON IMPORTABLE AU MAROC (RÉGIME STANDARD) : les véhicules de 5 ans ou plus sont refusés. Ce véhicule a ${ageLabel}.`
+    };
+  }
   return {
     isEligible: true,
-    severity: 'warning',
-    message: config.customsRules.morocco.legalWarning
+    severity: 'success',
+    message: `VÉHICULE ÉLIGIBLE AU MAROC : ce véhicule a ${ageLabel}, soit moins de 5 ans. Homologation NARSA requise après l’arrivée.`
   };
 }
 
@@ -107,8 +131,15 @@ export function calculateSimulation(
   config: GlobalReferenceConfig
 ): SimulationResult {
   // 1. Taux de change et spread
-  const baseRate = country === 'senegal' ? config.fxRates.CAD_to_XOF : config.fxRates.CAD_to_MAD;
-  const spreadPercent = financing.fxSpreadPercent;
+  const baseRate = country === 'senegal'
+    ? (config.fxRates.marketCAD_to_XOF ?? config.fxRates.CAD_to_XOF)
+    : (config.fxRates.marketCAD_to_MAD ?? config.fxRates.CAD_to_MAD);
+  const customsRate = country === 'senegal'
+    ? (config.fxRates.customsAssessedCAD_to_XOF ?? config.fxRates.CAD_to_XOF)
+    : (config.fxRates.customsAssessedCAD_to_MAD ?? config.fxRates.CAD_to_MAD);
+  // Spread bancaire de corridor imposé par le guide; le taux douanier reste le
+  // taux officiel (baseRate), sans diminution liée au spread de règlement.
+  const spreadPercent = country === 'senegal' ? 2.5 : 2.2;
   const effectiveRate = baseRate * (1 - spreadPercent / 100);
   const fxSpreadCostCad = vehicle.purchasePriceCad * (spreadPercent / 100);
 
@@ -161,7 +192,7 @@ export function calculateSimulation(
     ? (quotedFreightCad ?? selectedRoute.oceanFreightCad) / batchCount
     : (quotedFreightCad ?? selectedRoute.oceanFreightCad);
 
-  const marineInsuranceCad = vehicle.purchasePriceCad * (selectedRoute.marineInsuranceRatePercent / 100);
+  const marineInsuranceCad = vehicle.purchasePriceCad * 0.015;
   const destinationPortFeesCad = isContainer
     ? selectedRoute.portDestinationFeesCad / batchCount
     : selectedRoute.portDestinationFeesCad;
@@ -191,6 +222,10 @@ export function calculateSimulation(
   const portStorageBufferCad = addCosts.includePortStorageBuffer ? (addCosts.portStorageBufferCad || 250) : 0;
   const batteryAndRepairsCad = (addCosts.includeBatteryKeyFee ? (addCosts.batteryKeyFeeCad || 200) : 0) + (addCosts.customRepairsCad || 0);
   const totalAdditionalFeesCad = transitAgentFeeCad + roroCleaningFeeCad + portStorageBufferCad + batteryAndRepairsCad;
+  const cersFeeCad = vehicle.purchasePriceCad > 2000 ? 100 : 0;
+  const bscFeeCad = country === 'senegal' ? 150 : 0;
+  const narsaFeeCad = country === 'maroc' ? 250 : 0;
+  const totalComplianceFeesCad = cersFeeCad + bscFeeCad + narsaFeeCad;
 
   // 6. Douane & Taxes : une valeur externe n'est utilisée que si elle est documentée.
   const requestedValuationBasis = customs.valuationBasis || 'invoice';
@@ -212,14 +247,26 @@ export function calculateSimulation(
 
   // Base taxable
   const taxableBaseVehicle = valuationBasis === 'argus_official' ? estimatedArgusValue : vehicle.purchasePriceCad;
-  const customsTaxableValueCad = taxableBaseVehicle + oceanFreightCad + marineInsuranceCad;
+  const customsFreightCad = 2200;
+  const customsTaxableValueCad = taxableBaseVehicle + customsFreightCad + marineInsuranceCad;
 
   let customsAndTaxesCad = 0;
-  let taxRateEffective = 0;
+  let customsDutyCad = 0;
+  let statisticalTaxCad = 0;
+  let regionalLeviesCad = 0;
+  let parafiscalTaxCad = 0;
+  let ticCad = 0;
+  let vatCad = 0;
 
   if (country === 'senegal') {
-    taxRateEffective = customs.customTaxRatePercent ?? config.customsRules.senegal.taxRatePercent;
-    customsAndTaxesCad = customsTaxableValueCad * (taxRateEffective / 100);
+    // Formule officielle: DD 20%, RS 1%, prélèvements 1,7%, puis TVA 18%
+    // sur la CAF augmentée de ces trois postes.
+    const cifXof = customsTaxableValueCad * customsRate;
+    customsDutyCad = (cifXof * 0.20) / customsRate;
+    statisticalTaxCad = (cifXof * 0.01) / customsRate;
+    regionalLeviesCad = (cifXof * 0.017) / customsRate;
+    vatCad = (cifXof + cifXof * 0.20 + cifXof * 0.01 + cifXof * 0.017) * 0.18 / customsRate;
+    customsAndTaxesCad = customsDutyCad + statisticalTaxCad + regionalLeviesCad + vatCad;
   } else {
     // Maroc
     const mre = customs.moroccoOptions;
@@ -228,29 +275,52 @@ export function calculateSimulation(
       && mre.mreAgeOver60
       && mre.residenceOver10Years
       && mre.isFirstCarInLife
-      && CURRENT_YEAR - vehicle.year <= config.customsRules.morocco.mreMaxAgeYears
+      && CURRENT_YEAR - vehicle.year <= 10
     );
-    if (canApplyMreDiscount) {
-      const fullTaxRate = (config.customsRules.morocco.standardImportRatePercent + config.customsRules.morocco.vatRatePercent) / 100;
-      const discount = config.customsRules.morocco.mreMaxDiscountPercent / 100;
-      customsAndTaxesCad = customsTaxableValueCad * fullTaxRate * (1 - discount);
-    } else {
-      const importDuty = customsTaxableValueCad * (config.customsRules.morocco.standardImportRatePercent / 100);
-      const parafiscal = customsTaxableValueCad * (config.customsRules.morocco.parafiscalRatePercent / 100);
-      const vat = (customsTaxableValueCad + importDuty) * (config.customsRules.morocco.vatRatePercent / 100);
-      customsAndTaxesCad = importDuty + parafiscal + vat;
-    }
+    const cifMad = customsTaxableValueCad * customsRate;
+    customsDutyCad = (cifMad * 0.175 * (canApplyMreDiscount ? 0.15 : 1)) / customsRate;
+    parafiscalTaxCad = (cifMad * 0.0025) / customsRate;
+    const ticMad = vehicle.fuelType === 'Electric'
+      ? 0
+      : vehicle.engineCc < 1500
+        ? (vehicle.fuelType === 'Diesel' ? 30000 : 25000)
+        : vehicle.engineCc < 2000
+          ? (vehicle.fuelType === 'Diesel' ? 48000 : 40000)
+          : vehicle.engineCc < 2500
+            ? (vehicle.fuelType === 'Diesel' ? 72000 : 60000)
+            : (vehicle.fuelType === 'Diesel' ? 120000 : 100000);
+    ticCad = ticMad / customsRate;
+    vatCad = (cifMad + customsDutyCad * customsRate + parafiscalTaxCad * customsRate + ticMad) * 0.20 / customsRate;
+    customsAndTaxesCad = customsDutyCad + parafiscalTaxCad + ticCad + vatCad;
   }
 
   // Calcul du différentiel si la douane réévalue selon la cote Argus
-  const invoiceTaxableValue = vehicle.purchasePriceCad + oceanFreightCad + marineInsuranceCad;
-  const invoiceCustomsTaxes = country === 'senegal'
-    ? invoiceTaxableValue * (config.customsRules.senegal.taxRatePercent / 100)
-    : invoiceTaxableValue * 0.41;
-  const argusTaxableValue = estimatedArgusValue + oceanFreightCad + marineInsuranceCad;
-  const argusCustomsTaxes = country === 'senegal'
-    ? argusTaxableValue * (config.customsRules.senegal.taxRatePercent / 100)
-    : argusTaxableValue * 0.41;
+  const invoiceTaxableValue = vehicle.purchasePriceCad + customsFreightCad + marineInsuranceCad;
+  const argusTaxableValue = estimatedArgusValue + customsFreightCad + marineInsuranceCad;
+  const taxesForCif = (cifCad: number) => {
+    if (country === 'senegal') {
+      const cifLocal = cifCad * customsRate;
+      const dd = cifLocal * 0.20;
+      const rs = cifLocal * 0.01;
+      const regional = cifLocal * 0.017;
+      return (dd + rs + regional + (cifLocal + dd + rs + regional) * 0.18) / customsRate;
+    }
+    const cifLocal = cifCad * customsRate;
+    const mre = customs.moroccoOptions;
+    const isMre = Boolean(
+      mre?.isMRE
+      && mre.mreAgeOver60
+      && mre.residenceOver10Years
+      && mre.isFirstCarInLife
+      && CURRENT_YEAR - vehicle.year <= 10
+    );
+    const dd = cifLocal * 0.175 * (isMre ? 0.15 : 1);
+    const tpi = cifLocal * 0.0025;
+    const tic = ticCad * customsRate;
+    return (dd + tpi + tic + (cifLocal + dd + tpi + tic) * 0.20) / customsRate;
+  };
+  const invoiceCustomsTaxes = taxesForCif(invoiceTaxableValue);
+  const argusCustomsTaxes = taxesForCif(argusTaxableValue);
   const customsDifferenceArgusCad = Math.max(0, Math.round(argusCustomsTaxes - invoiceCustomsTaxes));
 
   // 7. Coût total rendu complet (Landed Cost)
@@ -260,6 +330,7 @@ export function calculateSimulation(
     + totalTransportCad
     + auctionAndBrokerFeesCad
     + totalAdditionalFeesCad
+    + totalComplianceFeesCad
     + customsAndTaxesCad;
 
   const landedCostLocal = landedCostCad * effectiveRate;
@@ -320,6 +391,11 @@ export function calculateSimulation(
       ? ['Taux de change de marché indicatif, distinct du taux réellement offert par votre institution financière.']
       : ['Taux de change local de repli : actualisation recommandée.']),
     'Frais portuaires et terrestres à reconfirmer selon la date, le véhicule et les prestataires.',
+    ...(cersFeeCad ? ['CERS obligatoire au moins 48 heures avant le chargement (véhicule de plus de 2 000 $ CA); frais estimés à 100 $ CA.'] : []),
+    'Contrôle PPSA requis avant achat : confirmer l’absence de financement ou de privilège bancaire sur le véhicule.',
+    ...(country === 'senegal'
+      ? ['BSC obligatoire avant embarquement (150 $ CA).']
+      : ['Inspection d’homologation NARSA obligatoire après arrivée (250 $ CA).']),
   ];
 
   const breakdown: CostBreakdown = {
@@ -339,7 +415,18 @@ export function calculateSimulation(
     portStorageBufferCad: Math.round(portStorageBufferCad),
     batteryAndRepairsCad: Math.round(batteryAndRepairsCad),
     totalAdditionalFeesCad: Math.round(totalAdditionalFeesCad),
+    cersFeeCad,
+    bscFeeCad,
+    narsaFeeCad,
+    totalComplianceFeesCad,
     customsTaxableValueCad: Math.round(customsTaxableValueCad),
+    customsFreightCad,
+    customsDutyCad: Math.round(customsDutyCad),
+    statisticalTaxCad: Math.round(statisticalTaxCad),
+    regionalLeviesCad: Math.round(regionalLeviesCad),
+    parafiscalTaxCad: Math.round(parafiscalTaxCad),
+    ticCad: Math.round(ticCad),
+    vatCad: Math.round(vatCad),
     customsAndTaxesCad: Math.round(customsAndTaxesCad),
     customsValuationBasis: valuationBasis,
     customsDifferenceArgusCad,
@@ -347,7 +434,8 @@ export function calculateSimulation(
     landedCostLocal: Math.round(landedCostLocal),
     localCurrencyCode,
     effectiveFxRate: effectiveRate,
-    baseFxRate: baseRate
+    baseFxRate: baseRate,
+    customsAssessedFxRate: customsRate
   };
 
   return {

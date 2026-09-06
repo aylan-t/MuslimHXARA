@@ -11,7 +11,7 @@ export const FxSensitivity: React.FC<FxSensitivityProps> = ({ simulation }) => {
   const [sliderVariation, setSliderVariation] = useState<number>(0);
 
   const baseRate = simulation.breakdown.baseFxRate;
-  const spreadPercent = simulation.financing.fxSpreadPercent;
+  const spreadPercent = simulation.destination === 'senegal' ? 2.5 : 2.2;
   const landedCostCad = simulation.breakdown.landedCostCad;
   const suggestedSalePriceLocal = simulation.suggestedSalePriceLocal;
   const currencyCode = simulation.breakdown.localCurrencyCode;

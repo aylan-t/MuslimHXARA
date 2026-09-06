@@ -96,7 +96,7 @@ export const StepDestination: React.FC<StepDestinationProps> = ({
               </p>
               <div className="text-[11px] font-medium text-emerald-800 bg-emerald-100/70 p-2 rounded-lg">
                 Âge max : <strong>10 ans</strong> (Décret 24 oct. 2025)<br />
-                Douane estimée : <strong>~44.5%</strong> sur base CAF
+                Douane calculée : <strong>44,786%</strong> sur base CAF
               </div>
             </div>
 
@@ -121,8 +121,8 @@ export const StepDestination: React.FC<StepDestinationProps> = ({
                 Importation très réglementée. Régime MRE avantageux.
               </p>
               <div className="text-[11px] font-medium text-orange-800 bg-orange-100/70 p-2 rounded-lg">
-                Régime MRE : <strong>5 ans max</strong> (abattement 90%)<br />
-                Régime commercial : <strong>autorisation requise</strong>
+                Standard : <strong>moins de 5 ans</strong><br />
+                Retraité MRE : <strong>10 ans max</strong> (abattement DD 85%)
               </div>
             </div>
 
@@ -166,7 +166,7 @@ export const StepDestination: React.FC<StepDestinationProps> = ({
               <span>Détails du dédouanement au Sénégal</span>
             </div>
             <p className="text-xs text-slate-600 leading-relaxed">
-              Au port de Dakar, la douane calcule les taxes sur la <strong>valeur CAF</strong> (Coût d'achat du véhicule + Assurance maritime + Fret maritime). Le taux cumulé moyen est de <strong>44.5%</strong> (Droits de douane + TVA 18% + prélèvements communautaires UEMOA/OHADA).
+              Au port de Dakar, la douane calcule sur la <strong>valeur CAF</strong> : fret de référence 2 200 $ CA et assurance à 1,5%. Formule : DD 20% + RS 1% + prélèvements 1,7%, puis TVA 18% sur la CAF augmentée de ces droits (taux effectif <strong>44,786%</strong>).
             </p>
             <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-200 text-slate-500">
               <span>Référence juridique : {config.customsRules.senegal.legalBasis}</span>
@@ -197,17 +197,17 @@ export const StepDestination: React.FC<StepDestinationProps> = ({
             </div>
 
             <p className="text-xs text-slate-700 leading-relaxed">
-              Si l'acheteur au Maroc bénéficie du statut MRE (retour définitif ou retraité MRE de 60 ans et plus ayant résidé au moins 10 ans à l'étranger), il a droit à un <strong>abattement exceptionnel de 90%</strong> sur les droits de douane.
+              Si l'acheteur bénéficie du régime retraité MRE (60 ans et plus, au moins 10 ans à l'étranger), il a droit à un <strong>abattement de 85%</strong> sur le droit d’importation.
             </p>
 
             {isMRE && (
               <div className="bg-white p-3.5 rounded-lg border border-orange-200 space-y-3 text-xs text-slate-800">
                  <div className="font-bold text-orange-950">Confirmez chaque condition avant d’appliquer l’abattement :</div>
                 <div className="flex items-center space-x-2">
-                  <span className={vehicleAge <= 5 ? "text-emerald-600 font-bold" : "text-red-600 font-bold"}>
-                    {vehicleAge <= 5 ? "Conforme" : "À vérifier"}
+                  <span className={vehicleAge <= 10 ? "text-emerald-600 font-bold" : "text-red-600 font-bold"}>
+                    {vehicleAge <= 10 ? "Conforme" : "À vérifier"}
                   </span>
-                  <span>Véhicule de moins de 5 ans (Actuel : {vehicleAge} an(s) - Année min. {CURRENT_YEAR - 5})</span>
+                  <span>Véhicule de 10 ans maximum (Actuel : {vehicleAge} an(s) - Année min. {CURRENT_YEAR - 10})</span>
                 </div>
                  {[
                    ['mreAgeOver60', 'L’acquéreur a 60 ans ou plus'],

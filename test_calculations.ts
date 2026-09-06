@@ -33,15 +33,24 @@ const elig2 = checkEligibility(oldSenegalVehicle, 'senegal', { country: 'senegal
 assert(elig2.isEligible === false, "Véhicule de 12 ans NON importable au Sénégal");
 assert(elig2.severity === 'error', "Gravité error pour véhicule de plus de 10 ans");
 assert(elig2.message.includes('24 octobre 2025'), "Mention obligatoire du décret du 24 octobre 2025");
+assert(checkEligibility({ ...DEMO_VEHICLE, year: CURRENT_YEAR - 10 }, 'senegal', { country: 'senegal' }, DEFAULT_CONFIG).isEligible, "Sénégal : véhicule ayant exactement 10 ans accepté");
+assert(!checkEligibility({ ...DEMO_VEHICLE, year: CURRENT_YEAR - 11 }, 'senegal', { country: 'senegal' }, DEFAULT_CONFIG).isEligible, "Sénégal : véhicule de plus de 10 ans refusé");
 
-// TEST 3: Maroc Régime MRE - Moins de 5 ans vs Plus de 5 ans
+// TEST 3: Maroc standard (<5 ans) et retraité MRE (10 ans max, abattement 85%)
 const mreRecentCar = { ...DEMO_VEHICLE, year: 2022 }; // 4 ans
 const elig3 = checkEligibility(mreRecentCar, 'maroc', { country: 'maroc', moroccoOptions: { isMRE: true, mreAgeOver60: true, residenceOver10Years: true, isFirstCarInLife: true } }, DEFAULT_CONFIG);
-assert(elig3.isEligible === true, "Véhicule MRE de 4 ans éligible avec abattement 90%");
+assert(elig3.isEligible === true, "Véhicule MRE de 4 ans éligible avec abattement 85%");
 
-const mreOldCar = { ...DEMO_VEHICLE, year: 2018 }; // 8 ans
+const mreOldCar = { ...DEMO_VEHICLE, year: CURRENT_YEAR - 11 };
 const elig4 = checkEligibility(mreOldCar, 'maroc', { country: 'maroc', moroccoOptions: { isMRE: true, mreAgeOver60: true, residenceOver10Years: true, isFirstCarInLife: true } }, DEFAULT_CONFIG);
-assert(elig4.isEligible === false, "Véhicule MRE de 8 ans NON éligible (limite 5 ans)");
+assert(elig4.isEligible === false, "Véhicule MRE de 11 ans NON éligible (limite 10 ans)");
+const standardFourYear = checkEligibility({ ...DEMO_VEHICLE, year: CURRENT_YEAR - 4 }, 'maroc', { country: 'maroc' }, DEFAULT_CONFIG);
+const standardFiveYear = checkEligibility({ ...DEMO_VEHICLE, year: CURRENT_YEAR - 5 }, 'maroc', { country: 'maroc' }, DEFAULT_CONFIG);
+assert(standardFourYear.isEligible, "Maroc standard : véhicule de 4 ans accepté");
+assert(!standardFiveYear.isEligible, "Maroc standard : véhicule ayant exactement 5 ans refusé");
+const rhdEligibility = checkEligibility({ ...DEMO_VEHICLE, steering: 'RHD' }, 'senegal', { country: 'senegal' }, DEFAULT_CONFIG);
+assert(!rhdEligibility.isEligible && rhdEligibility.message.includes('RHD'), "RHD/JDM explicitement refusé");
+assert(!checkEligibility({ ...DEMO_VEHICLE, isJdm: true }, 'maroc', { country: 'maroc' }, DEFAULT_CONFIG).isEligible, "Mention JDM explicitement refusée");
 const unconfirmedMreOptions = { country: 'maroc' as const, moroccoOptions: { isMRE: true, mreAgeOver60: false, residenceOver10Years: true, isFirstCarInLife: true } };
 const eligUnconfirmedMre = checkEligibility(mreRecentCar, 'maroc', unconfirmedMreOptions, DEFAULT_CONFIG);
 assert(eligUnconfirmedMre.severity === 'warning', "Une condition MRE non confirmée produit un avertissement");
@@ -62,6 +71,61 @@ assert(simResult.breakdown.totalTransportCad > 3500, "Transport complet A-Z calc
 assert(simResult.breakdown.customsAndTaxesCad > 7000, "Droits douane CAF ~44.5% calculés");
 assert(simResult.estimatedNetProfitCad > 4000, "Profit net positif à 18% de marge");
 assert(simResult.breakdown.localCurrencyCode === 'XOF', "Devise locale Sénégal = XOF");
+assert(simResult.breakdown.customsTaxableValueCad === 16613, "CAF douanière exacte : achat + fret 2 200 $ + assurance 1,5%");
+assert(simResult.breakdown.customsDutyCad === 3323, "Sénégal DD exact à 20% de la CAF");
+assert(simResult.breakdown.statisticalTaxCad === 166, "Sénégal RS exacte à 1% de la CAF");
+assert(simResult.breakdown.regionalLeviesCad === 282, "Sénégal prélèvements régionaux exacts à 1,7%");
+assert(simResult.breakdown.vatCad === 3669 && simResult.breakdown.customsAndTaxesCad === 7440, "Sénégal TVA composée à 18% et total taxes exacts");
+assert(simResult.breakdown.cersFeeCad === 100 && simResult.breakdown.bscFeeCad === 150, "CERS 100 $ et BSC 150 $ intégrés");
+assert(simResult.breakdown.effectiveFxRate === DEFAULT_CONFIG.fxRates.CAD_to_XOF * 0.975, "Spread Sénégal fixé à 2,5%");
+const liveFxChangedConfig = {
+  ...DEFAULT_CONFIG,
+  fxRates: {
+    ...DEFAULT_CONFIG.fxRates,
+    marketCAD_to_XOF: 500,
+    marketCAD_to_MAD: 8.1,
+  },
+};
+const liveFxChangedSimulation = calculateSimulation(
+  DEMO_VEHICLE, 'senegal',
+  { method: 'plateforme_transfert', fixedFeeCad: 15, variableFeePercent: 0.7, fxSpreadPercent: 1.2 },
+  { routeId: 'mtl-dkr-roro', batchVehiclesCount: 1 }, { country: 'senegal' }, 18, liveFxChangedConfig
+);
+assert(liveFxChangedSimulation.breakdown.baseFxRate === 500 && liveFxChangedSimulation.breakdown.customsAssessedFxRate === DEFAULT_CONFIG.fxRates.customsAssessedCAD_to_XOF, "Une mise à jour FX live modifie le règlement, jamais le taux douanier évalué");
+
+const moroccoGolden = calculateSimulation(
+  { ...DEMO_VEHICLE, year: CURRENT_YEAR - 4, engineCc: 2500, fuelType: 'Gasoline' },
+  'maroc',
+  { method: 'plateforme_transfert', fixedFeeCad: 15, variableFeePercent: 0.7, fxSpreadPercent: 1.2 },
+  { routeId: 'mtl-casa-roro', batchVehiclesCount: 1 },
+  { country: 'maroc' },
+  18,
+  DEFAULT_CONFIG
+);
+assert(moroccoGolden.breakdown.ticCad === Math.round(100000 / DEFAULT_CONFIG.fxRates.CAD_to_MAD), "Maroc TIC essence >=2500 cc = 100 000 MAD au taux douanier");
+assert(moroccoGolden.breakdown.customsAndTaxesCad === 23188, "Maroc : DD, TPI, TIC et TVA composée correspondent au cas doré");
+assert(moroccoGolden.breakdown.narsaFeeCad === 250, "NARSA 250 $ intégré");
+assert(moroccoGolden.breakdown.effectiveFxRate === DEFAULT_CONFIG.fxRates.CAD_to_MAD * 0.978, "Spread Maroc fixé à 2,2%");
+const moroccoDiesel = calculateSimulation(
+  { ...moroccoGolden.vehicle, engineCc: 1499, fuelType: 'Diesel' },
+  'maroc',
+  moroccoGolden.financing,
+  moroccoGolden.transport,
+  { country: 'maroc' },
+  18,
+  DEFAULT_CONFIG
+);
+const moroccoElectric = calculateSimulation(
+  { ...moroccoGolden.vehicle, fuelType: 'Electric' },
+  'maroc',
+  moroccoGolden.financing,
+  moroccoGolden.transport,
+  { country: 'maroc' },
+  18,
+  DEFAULT_CONFIG
+);
+assert(moroccoDiesel.breakdown.ticCad === Math.round(30000 / DEFAULT_CONFIG.fxRates.CAD_to_MAD), "TIC diesel <1500 cc = 30 000 MAD");
+assert(moroccoElectric.breakdown.ticCad === 0, "Véhicule électrique exonéré de TIC");
 
 // TEST 5: Différenciation des routes maritimes
 const simRouteMtl = calculateSimulation(
@@ -204,6 +268,16 @@ const simUndocumentedValuation = calculateSimulation(
 );
 assert(simUndocumentedValuation.breakdown.customsValuationBasis === 'invoice', "Une valeur sans référence documentée ne remplace pas la facture");
 
+const marocInvoiceArgus = calculateSimulation(
+  { ...DEMO_VEHICLE, year: CURRENT_YEAR - 4 },
+  'maroc',
+  { method: 'plateforme_transfert', fixedFeeCad: 15, variableFeePercent: 0.7, fxSpreadPercent: 1.2 },
+  { routeId: 'mtl-casa-roro', batchVehiclesCount: 1 },
+  { country: 'maroc', valuationBasis: 'argus_official', estimatedArgusValueCad: 18000, valuationReference: 'BADR-TEST' },
+  18, DEFAULT_CONFIG
+);
+assert(marocInvoiceArgus.breakdown.customsDifferenceArgusCad === 1569, "Écart Argus Maroc recalcule DD, TPI et TVA composée (pas un taux fixe)");
+
 const standardMreSimulation = calculateSimulation(
   mreRecentCar,
   'maroc',
@@ -223,6 +297,7 @@ const confirmedMreSimulation = calculateSimulation(
   DEFAULT_CONFIG
 );
 assert(standardMreSimulation.breakdown.customsAndTaxesCad > confirmedMreSimulation.breakdown.customsAndTaxesCad, "L’abattement MRE exige toutes les conditions confirmées");
+assert(confirmedMreSimulation.breakdown.customsDutyCad === 436, "MRE : abattement de 85% appliqué au seul droit d’importation de 17,5%");
 
 // TEST 11: Répertoire des sources institutionnelles
 assert(DEFAULT_CONFIG.officialSources.length >= 6, "Au moins 6 sources institutionnelles disponibles");

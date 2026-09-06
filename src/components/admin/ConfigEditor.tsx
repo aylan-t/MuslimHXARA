@@ -78,22 +78,22 @@ export const ConfigEditor: React.FC<ConfigEditorProps> = ({ config, onUpdateConf
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-4">
         <div className="flex items-center space-x-2 border-b border-slate-200 pb-3 font-bold text-base text-slate-900">
           <DollarSign className="w-5 h-5 text-amber-600" />
-          <span>Taux de change indicatifs & écart appliqué</span>
+          <span>Taux douaniers officiels figés & écart appliqué</span>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">
-              1 CAD en Dirham marocain (MAD)
+              Taux douanier CAD → MAD (versionné)
             </label>
             <input
               type="number"
               step="0.01"
-              value={localConfig.fxRates.CAD_to_MAD}
+              value={localConfig.fxRates.customsAssessedCAD_to_MAD}
               onChange={(e) =>
                 setLocalConfig({
                   ...localConfig,
-                  fxRates: { ...localConfig.fxRates, CAD_to_MAD: parseFloat(e.target.value) || 7.35 }
+                  fxRates: { ...localConfig.fxRates, customsAssessedCAD_to_MAD: parseFloat(e.target.value) || 7.35 }
                 })
               }
               className="w-full px-3 py-2 rounded-lg border border-slate-300 font-bold text-slate-900"
@@ -102,16 +102,16 @@ export const ConfigEditor: React.FC<ConfigEditorProps> = ({ config, onUpdateConf
 
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">
-              1 CAD en Franc CFA (XOF)
+              Taux douanier CAD → XOF (versionné)
             </label>
             <input
               type="number"
               step="1"
-              value={localConfig.fxRates.CAD_to_XOF}
+              value={localConfig.fxRates.customsAssessedCAD_to_XOF}
               onChange={(e) =>
                 setLocalConfig({
                   ...localConfig,
-                  fxRates: { ...localConfig.fxRates, CAD_to_XOF: parseFloat(e.target.value) || 440 }
+                  fxRates: { ...localConfig.fxRates, customsAssessedCAD_to_XOF: parseFloat(e.target.value) || 440 }
                 })
               }
               className="w-full px-3 py-2 rounded-lg border border-slate-300 font-bold text-slate-900"
@@ -187,7 +187,7 @@ export const ConfigEditor: React.FC<ConfigEditorProps> = ({ config, onUpdateConf
                       ...localConfig.customsRules,
                       senegal: {
                         ...localConfig.customsRules.senegal,
-                        taxRatePercent: parseFloat(e.target.value) || 44.5
+                        taxRatePercent: parseFloat(e.target.value) || 44.786
                       }
                     }
                   })
@@ -217,7 +217,7 @@ export const ConfigEditor: React.FC<ConfigEditorProps> = ({ config, onUpdateConf
                       ...localConfig.customsRules,
                       morocco: {
                         ...localConfig.customsRules.morocco,
-                        mreMaxAgeYears: parseInt(e.target.value) || 5
+                        mreMaxAgeYears: parseInt(e.target.value) || 10
                       }
                     }
                   })
@@ -240,7 +240,7 @@ export const ConfigEditor: React.FC<ConfigEditorProps> = ({ config, onUpdateConf
                       ...localConfig.customsRules,
                       morocco: {
                         ...localConfig.customsRules.morocco,
-                        mreMaxDiscountPercent: parseFloat(e.target.value) || 90
+                        mreMaxDiscountPercent: parseFloat(e.target.value) || 85
                       }
                     }
                   })

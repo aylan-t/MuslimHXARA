@@ -80,10 +80,10 @@ const dd = readFileSync(resolve(extRoot, 'src/engine/defaultData.ts'), 'utf8');
 const checks = [
   ['FX CAD→MAD 7.35', dd.includes('CAD_to_MAD: 7.35') || dd.includes('CAD_to_MAD:7.35')],
   ['FX CAD→XOF 440.0', dd.includes('CAD_to_XOF: 440')],
-  ['SN 44.5 %', dd.includes('taxRatePercent: 44.5')],
+  ['SN 44.786 % (formule détaillée du guide)', dd.includes('taxRatePercent: 44.786')],
   ['SN 10/15 ans + décret 2025-1845', dd.includes('maxAgeYearsTourism: 10') && dd.includes('maxAgeYearsTrucks: 15') && dd.includes('2025-1845')],
   ['MA 17.5 + 0.25 + TVA 20', dd.includes('standardImportRatePercent: 17.5') && dd.includes('parafiscalRatePercent: 0.25') && dd.includes('vatRatePercent: 20')],
-  ['MA MRE 5 ans / 90 %', dd.includes('mreMaxAgeYears: 5') && dd.includes('mreMaxDiscountPercent: 90')],
+  ['MA MRE 10 ans / abattement 85 %', dd.includes('mreMaxAgeYears: 10') && dd.includes('mreMaxDiscountPercent: 85')],
   ['6 routes', countOccurrences(dd, 'destinationPort:') === 6],
   ['3 méthodes de transfert', countOccurrences(dd, 'typicalSpreadPercent:') === 3],
   ['7 régions QC', countOccurrences(dd, 'costToHalifaxCad:') === 7],

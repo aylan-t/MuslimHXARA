@@ -138,6 +138,33 @@ describe('parser — fixtures reelles Facebook Marketplace', () => {
     assert.equal(r.rejection, null);
   });
 
+  it('détecte un VIN valide et une mention JDM/RHD explicite', () => {
+    const r = parseListing({
+      h1: '2019 Honda Civic',
+      bodyText:
+        '2019 Honda Civic\n5 500 $\nAbout this vehicle\nVIN: 2HGFC2F59KH000001\nJDM right-hand drive import',
+      headings: [{ tag: 'h2', text: 'About this vehicle' }],
+      url: 'https://www.facebook.com/marketplace/item/11/',
+      listingId: '11',
+    });
+    assert.equal(r.vin, '2HGFC2F59KH000001');
+    assert.equal(r.steeringSide, 'RHD');
+    assert.match(r.steeringEvidence ?? '', /JDM|right/i);
+  });
+
+  it('ignore I/O/Q dans un faux VIN et utilise LHD par défaut', () => {
+    const r = parseListing({
+      h1: '2018 Toyota Corolla',
+      bodyText: '2018 Toyota Corolla\n8 000 $\nAbout this vehicle\nABCDEFGHIOQ123456',
+      headings: [{ tag: 'h2', text: 'About this vehicle' }],
+      url: 'https://www.facebook.com/marketplace/item/12/',
+      listingId: '12',
+    });
+    assert.equal(r.vin, null);
+    assert.equal(r.steeringSide, 'LHD');
+    assert.equal(r.steeringEvidence, null);
+  });
+
   it('centimes ignores : "5 500,00 $" -> 5500 (pas 550000)', () => {
     const r = parseListing({
       h1: '2018 Toyota Corolla',

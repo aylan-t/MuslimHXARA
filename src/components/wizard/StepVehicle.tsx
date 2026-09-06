@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Vehicle, VehicleCategory, VehicleCondition, VehicleSource, PreloadedVehicle } from '../../types';
+import { Vehicle, VehicleCategory, VehicleCondition, VehicleSource, PreloadedVehicle, FuelType, SteeringLayout } from '../../types';
 import { Tooltip } from '../common/Tooltip';
 import { Car, DollarSign, Calendar, Gauge, ArrowRight, Sparkles, ChevronDown, ChevronUp, Check, MapPin, Wrench } from 'lucide-react';
 import { CURRENT_YEAR } from '../../services/calculationEngine';
@@ -34,6 +34,13 @@ export const StepVehicle: React.FC<StepVehicleProps> = ({
       model: p.model,
       year: p.year,
       purchasePriceCad: p.purchasePriceCad,
+      engineCc: p.engineCc,
+      fuelType: p.fuelType,
+      steering: p.steering,
+      isJdm: false,
+      vehicleClassification: p.vehicleClassification,
+      grossVehicleWeightKg: p.grossVehicleWeightKg,
+      classificationVerified: p.classificationVerified,
       mileageKm: p.mileageKm,
       category: p.category,
       condition: p.condition,
@@ -58,6 +65,9 @@ export const StepVehicle: React.FC<StepVehicleProps> = ({
     vehicle.model.trim().length > 0 &&
     vehicle.year >= 2000 &&
     vehicle.year <= CURRENT_YEAR &&
+    vehicle.engineCc > 0 &&
+    vehicle.grossVehicleWeightKg > 0 &&
+    vehicle.classificationVerified &&
     vehicle.purchasePriceCad > 0;
 
   // Voice assistant highlights (Agent 5): yellow flash on voice-filled fields,
@@ -195,6 +205,73 @@ export const StepVehicle: React.FC<StepVehicleProps> = ({
               </span>
             </div>
             {voiceFilledSet.has('vehicle.purchasePriceCad') && <VoiceBadge />}
+          </div>
+        </div>
+
+        {/* Données techniques requises pour la conformité et la TIC marocaine */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <div>
+            <label className="block text-sm font-bold text-slate-800 mb-1.5">
+              Cylindrée (cm³) <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="number"
+              min="1"
+              required
+              value={vehicle.engineCc || ''}
+              onChange={(e) => handleNumberChange('engineCc', e.target.value)}
+              placeholder="Ex. 2487"
+              className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-bold text-slate-800 mb-1.5">Carburant</label>
+            <select
+              value={vehicle.fuelType}
+              onChange={(e) => onChange({ fuelType: e.target.value as FuelType })}
+              className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3"
+            >
+              <option value="Gasoline">Essence</option>
+              <option value="Diesel">Diesel</option>
+              <option value="Hybrid">Hybride</option>
+              <option value="Electric">Électrique</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-bold text-slate-800 mb-1.5">Position du volant</label>
+            <select
+              value={vehicle.steering || 'LHD'}
+              onChange={(e) => onChange({ steering: e.target.value as SteeringLayout })}
+              className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3"
+            >
+              <option value="LHD">LHD — volant à gauche</option>
+              <option value="RHD">RHD — volant à droite</option>
+            </select>
+          </div>
+          <label className="sm:col-span-3 flex items-center gap-2 text-xs font-semibold text-slate-700">
+            <input
+              type="checkbox"
+              checked={Boolean(vehicle.isJdm)}
+              onChange={(e) => onChange({ isJdm: e.target.checked })}
+              className="h-4 w-4 rounded border-slate-300"
+            />
+            Le titre ou l’annonce mentionne explicitement « JDM » (refusé même si le volant est indiqué LHD)
+          </label>
+          <div className="sm:col-span-3 grid grid-cols-1 gap-3 border-t border-slate-200 pt-4 sm:grid-cols-2">
+            <label className="text-sm font-bold text-slate-800">Classification douanière vérifiée
+              <select value={vehicle.vehicleClassification} onChange={(e) => onChange({ vehicleClassification: e.target.value as 'passenger' | 'commercial_utility' })} className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-4 py-3">
+                <option value="passenger">Véhicule passager / léger</option>
+                <option value="commercial_utility">Utilitaire commercial</option>
+              </select>
+            </label>
+            <label className="text-sm font-bold text-slate-800">Poids total en charge (kg) <span className="text-red-500">*</span>
+              <input type="number" min="1" value={vehicle.grossVehicleWeightKg || ''} onChange={(e) => handleNumberChange('grossVehicleWeightKg', e.target.value)} className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-4 py-3" />
+              <span className="mt-1 block text-xs font-normal text-slate-500">≤ 3 500 kg : léger/passager; &gt; 3 500 kg : lourd.</span>
+            </label>
+            <label className="sm:col-span-2 flex items-center gap-2 text-xs font-semibold text-slate-700">
+              <input type="checkbox" checked={vehicle.classificationVerified} onChange={(e) => onChange({ classificationVerified: e.target.checked })} className="h-4 w-4 rounded border-slate-300" />
+              Je confirme la classe et le poids à partir du titre/certificat du véhicule.
+            </label>
           </div>
         </div>
 

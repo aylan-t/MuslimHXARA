@@ -144,24 +144,29 @@ export function FxBlock({ fxScenarios, isLive }: FxBlockProps) {
 export interface MissingInfoBlockProps {
   /** Deep link §6.3 : ouvre BASE/?prefill=… (construit par le parent). */
   onComplete: () => void;
+  vin?: string | null;
+  engineLitres?: number | null;
+  fuel?: string | null;
 }
 
 /** Encart ambre : cylindrée/VIN non renseignés (normal sur Marketplace), sans bloquer. */
-export function MissingInfoBlock({ onComplete }: MissingInfoBlockProps) {
+export function MissingInfoBlock({ onComplete, vin, engineLitres, fuel }: MissingInfoBlockProps) {
   return (
     <div className="axc-card axc-missing">
       <span className="axc-card-title">Infos manquantes (non bloquantes)</span>
       <ul className="axc-missing-list">
         <li>
-          Cylindrée : <strong>Non renseignée</strong>
+          Cylindrée : <strong>{engineLitres ? `${engineLitres} L` : 'Non renseignée'}</strong>
         </li>
         <li>
-          VIN : <strong>Non renseigné</strong>
+          Carburant : <strong>{fuel || 'Non renseigné'}</strong>
+        </li>
+        <li>
+          VIN : <strong>{vin || 'Non renseigné'}</strong>
         </li>
       </ul>
       <p className="axc-muted">
-        Les annonces Marketplace ne fournissent jamais ces données — le calcul n&apos;en dépend
-        pas.
+        Vérifiez ces données avant toute décision. Le calcul actuel n&apos;en dépend pas.
       </p>
       <button type="button" className="axc-btn axc-btn-primary" onClick={onComplete}>
         Compléter →

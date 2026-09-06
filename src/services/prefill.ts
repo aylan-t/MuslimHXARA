@@ -75,6 +75,22 @@ function assertValidPayload(value: unknown): asserts value is PrefillPayload {
   if (!isFiniteNumber(vehicle.purchasePriceCad) || vehicle.purchasePriceCad <= 0) {
     throw invalid('vehicle.purchasePriceCad');
   }
+  if (!isFiniteNumber(vehicle.engineCc) || vehicle.engineCc <= 0) {
+    throw invalid('vehicle.engineCc');
+  }
+  if (!['Gasoline', 'Diesel', 'Hybrid', 'Electric'].includes(String(vehicle.fuelType))) {
+    throw invalid('vehicle.fuelType');
+  }
+  if (vehicle.steering !== 'LHD' && vehicle.steering !== 'RHD') {
+    throw invalid('vehicle.steering');
+  }
+  if (!isFiniteNumber(vehicle.grossVehicleWeightKg) || vehicle.grossVehicleWeightKg <= 0) {
+    throw invalid('vehicle.grossVehicleWeightKg');
+  }
+  if (vehicle.vehicleClassification !== 'passenger' && vehicle.vehicleClassification !== 'commercial_utility') {
+    throw invalid('vehicle.vehicleClassification');
+  }
+  if (typeof vehicle.classificationVerified !== 'boolean') throw invalid('vehicle.classificationVerified');
   if (!isFiniteNumber(vehicle.mileageKm) || vehicle.mileageKm < 0) {
     throw invalid('vehicle.mileageKm');
   }

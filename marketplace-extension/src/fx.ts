@@ -1,3 +1,5 @@
+import type { GlobalReferenceConfig } from './engine/types';
+
 /**
  * fx.ts (AGENT-01) — Portage de fetchLiveFxRates() depuis
  * src/services/liveDataService.ts (contrat §0 + MARKETPLACE_EXTENSION.md §6.2).
@@ -27,6 +29,27 @@ const FALLBACK_RATES: LiveFxResult = {
   isLive: false,
   sourceName: 'Données de référence locales'
 };
+
+/**
+ * Injecte uniquement les taux de marché dans une configuration de calcul.
+ * Les taux douaniers évalués restent les références statiques/versionnées.
+ */
+export function applyLiveMarketRates(
+  config: GlobalReferenceConfig,
+  live: LiveFxResult,
+): GlobalReferenceConfig {
+  if (!live.isLive) return config;
+  return {
+    ...config,
+    fxRates: {
+      ...config.fxRates,
+      marketCAD_to_MAD: live.CAD_to_MAD,
+      marketCAD_to_XOF: live.CAD_to_XOF,
+      lastUpdated: live.lastUpdated,
+      isLive: true,
+    },
+  };
+}
 
 /** Taux de change en direct, sinon fallback local. 1 seul essai, jamais de retry. */
 export async function fetchLiveFxRates(): Promise<LiveFxResult> {

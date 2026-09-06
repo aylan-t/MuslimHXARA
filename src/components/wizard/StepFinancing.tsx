@@ -24,10 +24,13 @@ export const StepFinancing: React.FC<StepFinancingProps> = ({
 }) => {
   const [showAdvanced, setShowAdvanced] = useState(false);
 
-  const baseRate = country === 'senegal' ? config.fxRates.CAD_to_XOF : config.fxRates.CAD_to_MAD;
+  const baseRate = country === 'senegal'
+    ? (config.fxRates.marketCAD_to_XOF ?? config.fxRates.CAD_to_XOF)
+    : (config.fxRates.marketCAD_to_MAD ?? config.fxRates.CAD_to_MAD);
   const currencyCode = country === 'senegal' ? 'XOF' : 'MAD';
-  const effectiveRate = baseRate * (1 - financing.fxSpreadPercent / 100);
-  const spreadCostCad = Math.round(purchasePriceCad * (financing.fxSpreadPercent / 100));
+  const corridorSpreadPercent = country === 'senegal' ? 2.5 : 2.2;
+  const effectiveRate = baseRate * (1 - corridorSpreadPercent / 100);
+  const spreadCostCad = Math.round(purchasePriceCad * (corridorSpreadPercent / 100));
 
   // Comparaison chiffrée entre banque classique et plateforme
   const traditionalBankSpread = 3.4;
@@ -168,7 +171,7 @@ export const StepFinancing: React.FC<StepFinancingProps> = ({
           <div className="text-right flex-shrink-0">
             <span className="text-slate-500">Coût retenu sur le change :</span>
             <div className="text-sm font-black text-amber-800">
-              -{spreadCostCad} $ CAD ({financing.fxSpreadPercent}%)
+              -{spreadCostCad} $ CAD ({corridorSpreadPercent}%)
             </div>
           </div>
         </div>
@@ -180,7 +183,7 @@ export const StepFinancing: React.FC<StepFinancingProps> = ({
             onClick={() => setShowAdvanced(!showAdvanced)}
             className="flex items-center space-x-2 text-xs font-bold text-slate-600 hover:text-brand-700 py-1 cursor-pointer transition-colors"
           >
-            <span>{showAdvanced ? 'Masquer' : 'Afficher'} l'ajustement manuel du spread et des frais bancaires</span>
+            <span>{showAdvanced ? 'Masquer' : 'Afficher'} les paramètres de frais bancaires</span>
             {showAdvanced ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
           </button>
 
@@ -189,16 +192,16 @@ export const StepFinancing: React.FC<StepFinancingProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">
-                    Spread de change exact (%)
+                    Spread du corridor (%)
                   </label>
                   <input
                     type="number"
                     step="0.1"
                     min="0.1"
                     max="6.0"
-                    value={financing.fxSpreadPercent}
-                    onChange={(e) => onChange({ fxSpreadPercent: parseFloat(e.target.value) || 1.2 })}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white font-bold"
+                    value={corridorSpreadPercent}
+                    readOnly
+                    className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-100 font-bold"
                   />
                 </div>
 

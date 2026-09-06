@@ -170,10 +170,10 @@ function buildPostes(sim: SimulationResult): CostPoste[] {
         },
         { label: 'Assiette taxable (Valeur CAF)', value: money(b.customsTaxableValueCad) },
         { label: 'Total droits & taxes calculés', value: money(b.customsAndTaxesCad) },
-        // Conversion d'affichage via le taux effectif DU MOTEUR — aucun taux saisi ici.
+        // Les taxes sont évaluées par la douane à son taux officiel, distinct du taux de règlement.
         {
           label: 'Contrevaleur en devise locale',
-          value: `${fmtCad(Math.round(b.customsAndTaxesCad * b.effectiveFxRate))} ${b.localCurrencyCode}`,
+          value: `${fmtCad(Math.round(b.customsAndTaxesCad * b.customsAssessedFxRate))} ${b.localCurrencyCode}`,
         },
         ...(b.customsDifferenceArgusCad > 0
           ? [{ label: 'Risque réévaluation Argus vs Facture', value: `+${money(b.customsDifferenceArgusCad)}` }]
@@ -439,7 +439,12 @@ export const AutoTransatOverlay: React.FC<AutoTransatOverlayProps> = ({
         />
 
         {/* Infos manquantes + Compléter */}
-        <MissingInfoBlock onComplete={() => onComplete('')} />
+        <MissingInfoBlock
+          onComplete={() => onComplete('')}
+          vin={raw.vin}
+          engineLitres={raw.engineLitres}
+          fuel={raw.fuelRaw}
+        />
 
         <button type="button" onClick={() => onComplete('')} className="axc-cta">
           Voir le détail complet <span aria-hidden="true">→</span>

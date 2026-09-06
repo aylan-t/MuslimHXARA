@@ -39,7 +39,7 @@ export async function generateSimulationPdf(sim: SimulationResult): Promise<void
   text('Étude de rentabilité export automobile', margin, 783, 10, regular, rgb(0.78, 0.88, 0.91));
   text(new Date(sim.createdAt).toLocaleDateString('fr-CA'), 460, 804, 9, regular, rgb(1, 1, 1));
 
-  text(`${sim.vehicle.brand} ${sim.vehicle.model} · ${sim.vehicle.year}`, margin, 720, 17, bold);
+  text(`${sim.vehicle.brand} ${sim.vehicle.model} · ${sim.vehicle.year} · ${sim.vehicle.engineCc} cm³ · ${sim.vehicle.fuelType} · ${sim.vehicle.steering}`, margin, 720, 17, bold);
   text(`${sim.vehicle.mileageKm.toLocaleString('fr-CA')} km · destination ${sim.destination === 'senegal' ? 'Sénégal' : 'Maroc'}`, margin, 701, 10, regular, muted);
 
   const isDocumentedByUser = sim.calculationStatus === 'user_documented_quote';

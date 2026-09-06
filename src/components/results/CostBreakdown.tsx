@@ -29,14 +29,14 @@ export const CostBreakdown: React.FC<CostBreakdownProps> = ({ breakdown, financi
     {
       id: 'spread',
       title: '2. Écart de change (Spread FX)',
-      subtitle: `Commission invisible de change (${financing.fxSpreadPercent}%)`,
+      subtitle: `Spread de corridor (${breakdown.localCurrencyCode === 'XOF' ? '2.5' : '2.2'}%)`,
       amountCad: breakdown.fxSpreadCostCad,
       percent: Math.round((breakdown.fxSpreadCostCad / breakdown.landedCostCad) * 100),
       color: 'bg-amber-500',
       details: [
         { label: 'Taux de marché indicatif', value: `1 $ CA = ${breakdown.baseFxRate.toFixed(2)} ${breakdown.localCurrencyCode}` },
         { label: 'Taux effectif appliqué', value: `1 $ CA = ${breakdown.effectiveFxRate.toFixed(2)} ${breakdown.localCurrencyCode}` },
-        { label: 'Marge retenue par l\'intermédiaire', value: `${financing.fxSpreadPercent}% (${breakdown.fxSpreadCostCad.toLocaleString('fr-CA')} $ CA)` }
+        { label: 'Spread réglementaire retenu', value: `${breakdown.localCurrencyCode === 'XOF' ? '2.5' : '2.2'}% (${breakdown.fxSpreadCostCad.toLocaleString('fr-CA')} $ CA)` }
       ]
     },
     {
@@ -92,8 +92,22 @@ export const CostBreakdown: React.FC<CostBreakdownProps> = ({ breakdown, financi
       ]
     },
     {
+      id: 'compliance',
+      title: '7. Formalités obligatoires',
+      subtitle: 'Déclaration export et documents du corridor',
+      amountCad: breakdown.totalComplianceFeesCad,
+      percent: Math.round((breakdown.totalComplianceFeesCad / breakdown.landedCostCad) * 100),
+      color: 'bg-rose-600',
+      details: [
+        { label: 'Déclaration CERS (> 2 000 $ CA)', value: `${breakdown.cersFeeCad.toLocaleString('fr-CA')} $ CA` },
+        { label: 'BSC Sénégal', value: `${breakdown.bscFeeCad.toLocaleString('fr-CA')} $ CA` },
+        { label: 'Inspection NARSA Maroc', value: `${breakdown.narsaFeeCad.toLocaleString('fr-CA')} $ CA` },
+        { label: 'Contrôle PPSA', value: 'Aucun frais estimé — vérification obligatoire' }
+      ]
+    },
+    {
       id: 'customs',
-      title: '7. Douane & Taxes à destination',
+      title: '8. Douane & Taxes à destination',
       subtitle: `Droits de dédouanement (Base : ${breakdown.customsTaxableValueCad.toLocaleString('fr-CA')} $ CA - ${breakdown.customsValuationBasis === 'argus_official' ? 'Valeur documentée' : 'Facture'})`,
       amountCad: breakdown.customsAndTaxesCad,
       percent: Math.round((breakdown.customsAndTaxesCad / breakdown.landedCostCad) * 100),
@@ -101,8 +115,16 @@ export const CostBreakdown: React.FC<CostBreakdownProps> = ({ breakdown, financi
       details: [
         { label: 'Mode de valorisation retenu', value: breakdown.customsValuationBasis === 'argus_official' ? 'Valeur douanière documentée' : 'Prix d\'achat facturé' },
         { label: 'Assiette taxable (Valeur CAF)', value: `${breakdown.customsTaxableValueCad.toLocaleString('fr-CA')} $ CA` },
+        { label: 'Fret retenu dans la CAF', value: `${breakdown.customsFreightCad.toLocaleString('fr-CA')} $ CA` },
+        { label: 'Droit d’importation (DD)', value: `${breakdown.customsDutyCad.toLocaleString('fr-CA')} $ CA` },
+        ...(breakdown.statisticalTaxCad ? [{ label: 'Redevance statistique (RS)', value: `${breakdown.statisticalTaxCad.toLocaleString('fr-CA')} $ CA` }] : []),
+        ...(breakdown.regionalLeviesCad ? [{ label: 'Prélèvements régionaux (1,7%)', value: `${breakdown.regionalLeviesCad.toLocaleString('fr-CA')} $ CA` }] : []),
+        ...(breakdown.parafiscalTaxCad ? [{ label: 'Taxe parafiscale (TPI)', value: `${breakdown.parafiscalTaxCad.toLocaleString('fr-CA')} $ CA` }] : []),
+        ...(breakdown.localCurrencyCode === 'MAD' ? [{ label: 'Taxe intérieure de consommation (TIC; 0 pour électrique)', value: `${breakdown.ticCad.toLocaleString('fr-CA')} $ CA` }] : []),
+        { label: 'TVA', value: `${breakdown.vatCad.toLocaleString('fr-CA')} $ CA` },
         { label: 'Total droits & taxes calculés', value: `${breakdown.customsAndTaxesCad.toLocaleString('fr-CA')} $ CA` },
-        { label: 'Contrevaleur en devise locale', value: `${Math.round(breakdown.customsAndTaxesCad * breakdown.effectiveFxRate).toLocaleString('fr-CA')} ${breakdown.localCurrencyCode}` },
+        { label: 'Taux douanier officiel évalué', value: `1 $ CA = ${breakdown.customsAssessedFxRate.toFixed(2)} ${breakdown.localCurrencyCode}` },
+        { label: 'Contrevaleur au taux douanier officiel', value: `${Math.round(breakdown.customsAndTaxesCad * breakdown.customsAssessedFxRate).toLocaleString('fr-CA')} ${breakdown.localCurrencyCode}` },
         ...(breakdown.customsDifferenceArgusCad > 0 ? [{ label: 'Scénario estimatif de réévaluation', value: `+${breakdown.customsDifferenceArgusCad.toLocaleString('fr-CA')} $ CA` }] : [])
       ]
     }

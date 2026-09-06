@@ -10,7 +10,11 @@
     "default_popup": "popup.html",
     "default_title": "AutoTransat QC — logs & version"
   },
-  "host_permissions": ["*://*.facebook.com/*"],
+  "host_permissions": [
+    "*://*.facebook.com/*",
+    "https://vpic.nhtsa.dot.gov/api/vehicles/*",
+    "https://carapi.app/*"
+  ],
   "optional_host_permissions": ["http://localhost:3000/*"],
   "content_scripts": [
     {
