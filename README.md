@@ -95,3 +95,25 @@ Chargez ensuite `marketplace-extension/dist-extension/` depuis
 `chrome://extensions` en mode développeur. L'application cible par défaut
 `http://localhost:3000` et accepte le préremplissage sécurisé `?prefill=`.
 
+## Voice assistant (ai-audio-mode)
+
+One-time setup (installs npm + Python deps):
+
+```bash
+npm run setup
+```
+
+Then a single command starts both servers (web :3000 + API :8000):
+
+```bash
+npm run dev
+```
+
+(`dev:web` / `dev:api` run each server alone. Replit uses `dev:web`.)
+
+.env setup: copy `.env.example` → `.env` and fill `GEMINI_API_KEY` (get a key at https://aistudio.google.com/apikey). Never commit `.env` — it is covered by `.gitignore`; only `.env.example` is committed.
+
+Demo hosting note: the backend must run alongside the frontend — use a second Replit workflow or a separate host for the API.
+
+Frontend: point the voice service at the backend with `VITE_API_BASE_URL` (default `http://localhost:8000`).
+

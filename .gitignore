@@ -1,1 +1,6 @@
 node_modules
+
+# Env secrets (voice assistant: GEMINI_API_KEY) — never commit
+.env
+.env.*
+!.env.example

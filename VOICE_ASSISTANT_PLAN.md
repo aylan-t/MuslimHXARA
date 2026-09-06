@@ -1,6 +1,6 @@
 # Voice Assistant Bubble — Plan (Senior English Mode)
 
-Source: grill interview 2026-09-06. No code changed yet.
+Source: grill interview 2026-09-06. Step-0 done: `.gitignore` (+`.env`), `.env` placeholder, `.env.example`. No voice code yet.
 
 ## 1. Locked decisions
 
@@ -30,7 +30,7 @@ Source: grill interview 2026-09-06. No code changed yet.
 - `backend/main.py` (FastAPI): `/`, `/api/config`, `/api/calculate`. CORS `*`. In-memory config, no DB/env/dotenv. **The backend is optional and divergent (calculation-only, no annexes/Argus/regions) — the frontend never calls it.**
 - **No frontend→backend plumbing exists**: zero `fetch` to any backend, zero `VITE_*` vars, zero `.env` files, no dev proxy in `vite.config.ts` (port 3000 local / 5000 Replit, backend docs mention 8000). This plumbing is part of the build (see §3 step 0).
 - `backend/requirements.txt`: fastapi, uvicorn, pydantic only. `backend/schemas.py`: `VehicleInput` has NO `originRegionId`/`isNonRunning`, `CustomsSelectionInput` has NO `valuationBasis` — voice needs new/extra pydantic models, not a reuse as-is.
-- **`.gitignore` contains only `node_modules` — `.env` is NOT ignored.** Adding the ignore rule is step 0 (otherwise `GEMINI_API_KEY` will be committed on the first `git add .`).
+- **`.gitignore` now covers `.env`/`.env.*` (except `.env.example`) — done in step 0, key still to be filled in `.env` at the end.**
 - No existing voice, MediaRecorder, or Gemini code anywhere (only these .md files mention them).
 - Deploy: single Replit workflow (frontend only). **The FastAPI backend must be deployed/running alongside for voice to work in the demo** (second Replit process or separate host) — decided in build, default: document + run locally + note prod host.
 - Mic requires secure context: Replit webview (HTTPS) OK, `localhost` OK, plain-HTTP LAN IP will fail `getUserMedia` — needs a dedicated error message (see §5).

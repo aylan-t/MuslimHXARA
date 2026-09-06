@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Vehicle,
   DestinationCountry,
@@ -9,7 +9,7 @@ import {
   GlobalReferenceConfig
 } from './types';
 import { loadStoredConfig, saveStoredConfig } from './services/storageService';
-import { calculateSimulation } from './services/calculationEngine';
+import { calculateSimulation, CURRENT_YEAR } from './services/calculationEngine';
 import { fetchLiveFxRates } from './services/liveDataService';
 import { parsePrefillFromUrl, type PrefillMeta } from './services/prefill';
 import { DEMO_VEHICLE } from './data/defaultData';
@@ -25,6 +25,27 @@ import { ContainerOptimizer } from './components/batch/ContainerOptimizer';
 import { SimulationHistory } from './components/history/SimulationHistory';
 import { ConfigEditor } from './components/admin/ConfigEditor';
 import { OfficialSourcesModal } from './components/common/OfficialSourcesModal';
+import { VoiceAssistantBubble } from './components/voice/VoiceAssistantBubble';
+import type { VoiceAssistantState } from './components/voice/VoiceAssistantBubble';
+
+// Voice kill switch (default OFF): set VITE_VOICE_ASSISTANT_ENABLED=true in
+// .env and restart `npm run dev` to show the assistant bubble. When off, no
+// mic is requested, no voice loop is created, no voice API call is made.
+const VOICE_ASSISTANT_ENABLED: boolean =
+  import.meta.env.VITE_VOICE_ASSISTANT_ENABLED === 'true';
+import {
+  createVoiceLoop,
+  ensureSecureContext,
+  getApiBase,
+  playMp3,
+  stopPlayback
+} from './services/voiceService';
+import type {
+  VoiceLoop,
+  VoiceLoopError,
+  VoiceParseResult
+} from './services/voiceService';
+import { VEHICLE_CATALOG } from './data/vehicleCatalog';
 
 const INITIAL_VEHICLE: Vehicle = {
   brand: '',
@@ -40,6 +61,86 @@ const INITIAL_VEHICLE: Vehicle = {
   originRegionId: 'grand-montreal',
   isNonRunning: false
 };
+
+export interface VoiceRecapState {
+  lines: string[];
+  snapshot: string;
+}
+
+function isVoiceRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function toTrimmedVoiceString(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed === '' ? null : trimmed;
+}
+
+function toRoundedVoiceInt(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return Math.round(value);
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return Math.round(parsed);
+  }
+  return null;
+}
+
+function flattenVoiceUpdatePaths(updates: Record<string, unknown>): string[] {
+  const paths: string[] = [];
+  for (const [key, value] of Object.entries(updates)) {
+    if (isVoiceRecord(value)) {
+      for (const sub of Object.keys(value)) paths.push(`${key}.${sub}`);
+    } else {
+      paths.push(key);
+    }
+  }
+  return paths;
+}
+
+// Inline recap gate card (Agent 5 owns it here — no new files).
+function VoiceRecapCard({
+  lines,
+  onCorrect,
+  onChange
+}: {
+  lines: string[];
+  onCorrect: () => void;
+  onChange: () => void;
+}) {
+  return (
+    <div
+      role="dialog"
+      aria-label="Voice recap"
+      aria-live="polite"
+      className="rounded-2xl border-2 border-brand-500 bg-white p-5 shadow-md"
+    >
+      <h3 className="text-lg font-bold text-slate-900">Here&apos;s what I got:</h3>
+      <ul className="mt-2 space-y-1 text-base text-slate-800">
+        {lines.map((line) => (
+          <li key={line}>• {line}</li>
+        ))}
+      </ul>
+      <p className="mt-2 text-sm text-slate-600">Say correct to continue, or say change.</p>
+      <div className="mt-4 flex flex-wrap gap-3">
+        <button
+          type="button"
+          onClick={onCorrect}
+          className="rounded-xl bg-brand-600 px-5 py-3 font-bold text-white hover:bg-brand-700"
+        >
+          Correct — Continue
+        </button>
+        <button
+          type="button"
+          onClick={onChange}
+          className="rounded-xl border border-slate-300 px-5 py-3 font-bold text-slate-700 hover:bg-slate-100"
+        >
+          Change
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export function App() {
   const [config, setConfig] = useState<GlobalReferenceConfig>(loadStoredConfig());
@@ -75,6 +176,378 @@ export function App() {
   });
   const [targetMargin, setTargetMargin] = useState<number>(18);
   const [prefillMeta, setPrefillMeta] = useState<PrefillMeta | null>(null);
+
+  // ---------- Voice assistant global state (Agent 5) ----------
+  const [voiceOn, setVoiceOn] = useState<boolean>(false);
+  const [voiceState, setVoiceState] = useState<VoiceAssistantState>('idle');
+  const [nextPrompt, setNextPrompt] = useState<string | undefined>(undefined);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [confirmedFields, setConfirmedFields] = useState<string[]>([]);
+  const [voiceFilledFields, setVoiceFilledFields] = useState<string[]>([]);
+  const [futureHits, setFutureHits] = useState<string[]>([]);
+  const [lowConfStrikes, setLowConfStrikes] = useState<Record<string, number>>({});
+  const [frozenFields, setFrozenFields] = useState<string[]>([]);
+  const [missingFields, setMissingFields] = useState<string[]>([]);
+  const [offlineMode, setOfflineMode] = useState<boolean>(false);
+  const [recap, setRecap] = useState<VoiceRecapState | null>(null);
+
+  // Refs mirror state for the loop callbacks (no stale closures, no restarts).
+  const voiceLoopRef = useRef<VoiceLoop | null>(null);
+  const currentStepRef = useRef<number>(currentStep);
+  const confirmedRef = useRef<string[]>([]);
+  const voiceOnRef = useRef<boolean>(false);
+  const recapRef = useRef<VoiceRecapState | null>(null);
+  const vehicleRef = useRef<Vehicle>(vehicle);
+  const destinationRef = useRef<DestinationCountry>(destination);
+  const transportRef = useRef<TransportSelection>(transport);
+  const customsRef = useRef<CustomsSelection>(customs);
+  const configRef = useRef<GlobalReferenceConfig>(config);
+  const frozenRef = useRef<string[]>([]);
+  const strikesRef = useRef<Record<string, number>>({});
+  const calculateRef = useRef<() => void>(() => undefined);
+
+  useEffect(() => { currentStepRef.current = currentStep; }, [currentStep]);
+  useEffect(() => { vehicleRef.current = vehicle; }, [vehicle]);
+  useEffect(() => { destinationRef.current = destination; }, [destination]);
+  useEffect(() => { transportRef.current = transport; }, [transport]);
+  useEffect(() => { customsRef.current = customs; }, [customs]);
+  useEffect(() => { configRef.current = config; }, [config]);
+  useEffect(() => { recapRef.current = recap; }, [recap]);
+
+  // Speak a prompt via the backend TTS endpoint (best-effort, text stays on screen).
+  const speakText = useCallback(async (text: string): Promise<void> => {
+    const short = text.slice(0, 280).trim();
+    if (short === '') return;
+    setVoiceState('speaking');
+    try {
+      const res = await fetch(`${getApiBase()}/api/voice/speak`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: short, voice: 'Kore', pace: 'slow' })
+      });
+      if (!res.ok) throw new Error(`speak failed: ${res.status}`);
+      const buf = await res.arrayBuffer();
+      await playMp3(buf);
+    } catch {
+      // TTS failure never blocks the form: the prompt text stays visible.
+    } finally {
+      setVoiceState(voiceOnRef.current ? 'listening' : 'idle');
+    }
+  }, []);
+
+  const handleVoiceError = useCallback((err: VoiceLoopError): void => {
+    if (err.kind === 'insecure-context') {
+      setVoiceError(err.message);
+      setVoiceState('error');
+      voiceOnRef.current = false;
+      setVoiceOn(false);
+      return;
+    }
+    if (err.kind === 'mic-denied' || err.kind === 'unsupported') {
+      // Big banner path: the manual form stays fully usable, nothing is blocked.
+      setVoiceError(err.message);
+      setVoiceState('error');
+      return;
+    }
+    if (err.kind === 'server' && err.retryable === false) {
+      // Fatal server-side config (e.g. missing GEMINI_API_KEY): stop the loop
+      // instead of re-uploading every chunk, and show exactly what to do.
+      voiceLoopRef.current?.stop();
+      stopPlayback();
+      voiceOnRef.current = false;
+      setVoiceOn(false);
+      setVoiceError(err.message);
+      setVoiceState('error');
+      return;
+    }
+    // timeout / server / network → Offline mode badge, keep the loop alive for retry.
+    setOfflineMode(true);
+  }, []);
+
+  const handleVoiceChunk = useCallback((result: VoiceParseResult): void => {
+    // Recap voice commands: "correct" continues, "change" goes back to step 1.
+    const transcript = (result.transcript ?? '').toLowerCase();
+    if (recapRef.current !== null) {
+      if (transcript.includes('correct')) {
+        calculateRef.current();
+        return;
+      }
+      if (transcript.includes('change')) {
+        setRecap(null);
+        setCurrentStep(1);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+      }
+    }
+
+    const missing = Array.isArray(result.missing_for_current_step)
+      ? result.missing_for_current_step
+      : [];
+    setMissingFields(missing);
+    if (Array.isArray(result.future_hits) && result.future_hits.length > 0) {
+      setFutureHits((prev) => Array.from(new Set([...prev, ...result.future_hits])));
+    }
+
+    const updates: Record<string, unknown> = isVoiceRecord(result.updates) ? result.updates : {};
+
+    // Low-confidence gate: 2 strikes on the same field freezes voice for it.
+    if (result.confidence < 0.7) {
+      const paths = flattenVoiceUpdatePaths(updates);
+      const target = missing[0] ?? paths[0] ?? 'general';
+      if (!frozenRef.current.includes(target)) {
+        const next = (strikesRef.current[target] ?? 0) + 1;
+        strikesRef.current = { ...strikesRef.current, [target]: next };
+        setLowConfStrikes(strikesRef.current);
+        if (next >= 2) {
+          frozenRef.current = [...frozenRef.current, target];
+          setFrozenFields(frozenRef.current);
+          setNextPrompt(`Tap to type ${target} — I had trouble hearing it.`);
+        } else if (result.next_prompt) {
+          setNextPrompt(result.next_prompt);
+        }
+      }
+      return; // skip applying
+    }
+
+    const applied: string[] = [];
+    const notFrozen = (path: string): boolean => !frozenRef.current.includes(path);
+
+    // --- vehicle (LAST-WINS, BRAND BEFORE MODEL) ---
+    if (isVoiceRecord(updates.vehicle)) {
+      const v = updates.vehicle;
+      const brandHeard = toTrimmedVoiceString(v.brand);
+      const prevBrand = vehicleRef.current.brand;
+      let canonicalBrand: string | null = null;
+      if (brandHeard !== null) {
+        const found = VEHICLE_CATALOG.find(
+          (b) => b.name.toLowerCase() === brandHeard.toLowerCase()
+        );
+        canonicalBrand = found ? found.name : brandHeard;
+      }
+      // Drop the model when the brand is unmatched or empty.
+      let modelHeard = toTrimmedVoiceString(v.model);
+      if (modelHeard !== null) {
+        const effectiveBrand = canonicalBrand ?? prevBrand;
+        const brandEntry = VEHICLE_CATALOG.find(
+          (b) => b.name.toLowerCase() === (effectiveBrand ?? '').toLowerCase()
+        );
+        if (!effectiveBrand || effectiveBrand.trim() === '' || !brandEntry) {
+          modelHeard = null;
+        } else {
+          const modelFound = brandEntry.models.find(
+            (m) => m.name.toLowerCase() === modelHeard!.toLowerCase()
+          );
+          if (modelFound) modelHeard = modelFound.name;
+        }
+      }
+      // BRAND BEFORE MODEL: brand first, then model, in the same handler.
+      if (canonicalBrand !== null && notFrozen('vehicle.brand')) {
+        const b = canonicalBrand;
+        const brandChanged = b.toLowerCase() !== prevBrand.toLowerCase();
+        if (modelHeard === null && brandChanged) {
+          // Mirror the combobox semantics: a brand change clears a stale model.
+          setVehicle((prev) => ({ ...prev, brand: b, model: '' }));
+          vehicleRef.current = { ...vehicleRef.current, brand: b, model: '' };
+        } else {
+          setVehicle((prev) => ({ ...prev, brand: b }));
+          vehicleRef.current = { ...vehicleRef.current, brand: b };
+        }
+        applied.push('vehicle.brand');
+      }
+      if (modelHeard !== null && notFrozen('vehicle.model')) {
+        const m = modelHeard;
+        const effBrand = canonicalBrand ?? vehicleRef.current.brand;
+        const brandEntry = VEHICLE_CATALOG.find(
+          (b) => b.name.toLowerCase() === effBrand.toLowerCase()
+        );
+        const modelMatch = brandEntry?.models.find(
+          (item) => item.name.toLowerCase() === m.toLowerCase()
+        );
+        if (modelMatch) {
+          setVehicle((prev) => ({ ...prev, model: m, category: modelMatch.category }));
+          vehicleRef.current = { ...vehicleRef.current, model: m, category: modelMatch.category };
+          applied.push('vehicle.model', 'vehicle.category');
+        } else {
+          setVehicle((prev) => ({ ...prev, model: m }));
+          vehicleRef.current = { ...vehicleRef.current, model: m };
+          applied.push('vehicle.model');
+        }
+      }
+      const rest: Partial<Vehicle> = {};
+      const restPaths: string[] = [];
+      const year = toRoundedVoiceInt(v.year);
+      if (year !== null && notFrozen('vehicle.year')) {
+        rest.year = year;
+        restPaths.push('vehicle.year');
+      }
+      const mileage = toRoundedVoiceInt(v.mileageKm);
+      if (mileage !== null && notFrozen('vehicle.mileageKm')) {
+        rest.mileageKm = mileage;
+        restPaths.push('vehicle.mileageKm');
+      }
+      const price = toRoundedVoiceInt(v.purchasePriceCad);
+      if (price !== null && notFrozen('vehicle.purchasePriceCad')) {
+        rest.purchasePriceCad = price;
+        restPaths.push('vehicle.purchasePriceCad');
+      }
+      const category = toTrimmedVoiceString(v.category);
+      if (
+        category !== null &&
+        (category === 'citadine' ||
+          category === 'berline' ||
+          category === 'suv' ||
+          category === 'camionnette') &&
+        notFrozen('vehicle.category')
+      ) {
+        rest.category = category;
+        restPaths.push('vehicle.category');
+      }
+      if (Object.keys(rest).length > 0) {
+        setVehicle((prev) => ({ ...prev, ...rest }));
+        vehicleRef.current = { ...vehicleRef.current, ...rest };
+        applied.push(...restPaths);
+      }
+    }
+
+    // --- destination (keeps the default-route sync, like a manual change) ---
+    const destRaw = updates.destination;
+    const destHeard =
+      typeof destRaw === 'string'
+        ? destRaw
+        : isVoiceRecord(destRaw)
+          ? toTrimmedVoiceString(destRaw.country)
+          : null;
+    if (
+      (destHeard === 'senegal' || destHeard === 'maroc') &&
+      notFrozen('destination')
+    ) {
+      const country = destHeard;
+      setDestination(country);
+      destinationRef.current = country;
+      setCustoms((prev) => ({ ...prev, country }));
+      customsRef.current = { ...customsRef.current, country };
+      const routes = configRef.current.routes;
+      const defRoute =
+        routes.find((r) => r.destinationCountry === country && r.recommended) ??
+        routes.find((r) => r.destinationCountry === country);
+      if (defRoute) {
+        setTransport((prev) => ({ ...prev, routeId: defRoute.id }));
+        transportRef.current = { ...transportRef.current, routeId: defRoute.id };
+      }
+      applied.push('destination');
+    }
+
+    // --- transport ---
+    if (isVoiceRecord(updates.transport)) {
+      const t = updates.transport;
+      const patch: Partial<TransportSelection> = {};
+      const tPaths: string[] = [];
+      const routeId = toTrimmedVoiceString(t.routeId);
+      if (routeId !== null && notFrozen('transport.routeId')) {
+        const known = configRef.current.routes.some((r) => r.id === routeId);
+        if (known) {
+          patch.routeId = routeId;
+          tPaths.push('transport.routeId');
+        }
+      }
+      const count = toRoundedVoiceInt(t.batchVehiclesCount);
+      if (count !== null && count >= 1 && count <= 4 && notFrozen('transport.batchVehiclesCount')) {
+        patch.batchVehiclesCount = count;
+        tPaths.push('transport.batchVehiclesCount');
+      }
+      if (Object.keys(patch).length > 0) {
+        setTransport((prev) => ({ ...prev, ...patch }));
+        transportRef.current = { ...transportRef.current, ...patch };
+        applied.push(...tPaths);
+      }
+    }
+
+    // --- customs ---
+    if (isVoiceRecord(updates.customs)) {
+      const c = updates.customs;
+      const patch: Partial<CustomsSelection> = {};
+      const cPaths: string[] = [];
+      const cc = toTrimmedVoiceString(c.country);
+      if ((cc === 'senegal' || cc === 'maroc') && notFrozen('customs.country')) {
+        patch.country = cc;
+        cPaths.push('customs.country');
+      }
+      const vb = toTrimmedVoiceString(c.valuationBasis);
+      if ((vb === 'invoice' || vb === 'argus_official') && notFrozen('customs.valuationBasis')) {
+        patch.valuationBasis = vb;
+        cPaths.push('customs.valuationBasis');
+      }
+      if (Object.keys(patch).length > 0) {
+        setCustoms((prev) => ({ ...prev, ...patch }));
+        customsRef.current = { ...customsRef.current, ...patch };
+        applied.push(...cPaths);
+      }
+    }
+
+    // Track confirmed += applied field paths (LAST-WINS: re-hearing re-confirms).
+    const fresh = applied.filter((p) => !frozenRef.current.includes(p));
+    if (fresh.length > 0) {
+      confirmedRef.current = Array.from(new Set([...confirmedRef.current, ...fresh]));
+      setConfirmedFields(confirmedRef.current);
+      setVoiceFilledFields((prev) => Array.from(new Set([...prev, ...fresh])));
+    }
+    if (result.next_prompt) {
+      setNextPrompt(result.next_prompt);
+      void speakText(result.next_prompt);
+    }
+  }, [speakText]);
+
+  const handleVoiceToggle = useCallback((): void => {
+    if (!VOICE_ASSISTANT_ENABLED) {
+      return;
+    }
+    if (voiceOnRef.current) {
+      voiceLoopRef.current?.stop();
+      stopPlayback();
+      voiceOnRef.current = false;
+      setVoiceOn(false);
+      setVoiceState('idle');
+      return;
+    }
+    setVoiceError(null);
+    setOfflineMode(false);
+    try {
+      ensureSecureContext();
+    } catch (err) {
+      setVoiceError(err instanceof Error ? err.message : 'Microphone needs HTTPS or localhost');
+      setVoiceState('error');
+      return;
+    }
+    if (voiceLoopRef.current === null) {
+      voiceLoopRef.current = createVoiceLoop({
+        onChunk: handleVoiceChunk,
+        onError: handleVoiceError
+      });
+    }
+    const loop = voiceLoopRef.current;
+    setVoiceState('listening');
+    void loop
+      .start(currentStepRef.current, { confirmed: confirmedRef.current })
+      .then(() => {
+        voiceOnRef.current = true;
+        setVoiceOn(true);
+      })
+      .catch(() => {
+        // The loop already reported the cause through onError.
+        voiceOnRef.current = false;
+        setVoiceOn(false);
+        setVoiceState((prev) => (prev === 'listening' ? 'idle' : prev));
+      });
+  }, [handleVoiceChunk, handleVoiceError]);
+
+  // Keep the backend's known snapshot fresh while listening (no restart, no navigation).
+  useEffect(() => {
+    if (voiceOn && voiceLoopRef.current !== null) {
+      void voiceLoopRef.current
+        .start(currentStep, { confirmed: confirmedFields })
+        .catch(() => undefined);
+    }
+  }, [voiceOn, currentStep, confirmedFields]);
 
   // Résultat actuel
   const [currentResult, setCurrentResult] = useState<SimulationResult | null>(null);
@@ -163,6 +636,80 @@ export function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  useEffect(() => {
+    calculateRef.current = handleCalculate;
+  });
+
+  // Recap gate (Agent 5): spoken + visual summary before Calculate.
+  const buildRecap = useCallback((): void => {
+    const v = vehicleRef.current;
+    const d = destinationRef.current;
+    const t = transportRef.current;
+    const lines = [
+      `${v.brand} ${v.model} ${v.year}`.trim(),
+      `${v.mileageKm.toLocaleString('en-US')} km, $${v.purchasePriceCad.toLocaleString('en-US')}`,
+      `Destination: ${d === 'senegal' ? 'Senegal' : 'Morocco'}`,
+      `Transport route: ${t.routeId} (${t.batchVehiclesCount} vehicle${t.batchVehiclesCount > 1 ? 's' : ''})`
+    ];
+    const snapshot = JSON.stringify({
+      vehicle: v,
+      destination: d,
+      transport: t,
+      customs: customsRef.current
+    });
+    const next: VoiceRecapState = { lines, snapshot };
+    recapRef.current = next;
+    setRecap(next);
+    void speakText(
+      `Here's what I got: ${v.brand} ${v.model}, ${v.year}, ${v.mileageKm} kilometers, $${v.purchasePriceCad}. Say correct to continue, or say change.`
+    );
+  }, [speakText]);
+
+  // Gated Calculate: with voice on and no confirmed recap, show the recap first.
+  // Existing gates (isFormValid, checkEligibility) are never bypassed.
+  const handleCalculateGated = useCallback((): void => {
+    if (voiceOnRef.current && recapRef.current === null) {
+      buildRecap();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+    calculateRef.current();
+  }, [buildRecap]);
+
+  const handleVoiceRecapChange = useCallback((): void => {
+    setRecap(null);
+    setCurrentStep(1);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
+
+  // Recap as soon as step 4 has no missing fields left (voice heard everything).
+  useEffect(() => {
+    if (
+      currentStep === 4 &&
+      voiceOn &&
+      recap === null &&
+      missingFields.length === 0 &&
+      confirmedFields.length > 0
+    ) {
+      buildRecap();
+    }
+  }, [currentStep, voiceOn, recap, missingFields, confirmedFields, buildRecap]);
+
+  // Step-1 gating checklist: defaults count as missing until spoken/confirmed.
+  const step1Missing: string[] = [];
+  if (vehicle.brand.trim() === '' || !confirmedFields.includes('vehicle.brand')) {
+    step1Missing.push('brand');
+  }
+  if (vehicle.model.trim() === '' || !confirmedFields.includes('vehicle.model')) {
+    step1Missing.push('model');
+  }
+  if (!confirmedFields.includes('vehicle.year') || vehicle.year < 2000 || vehicle.year > CURRENT_YEAR) {
+    step1Missing.push('year');
+  }
+  if (!confirmedFields.includes('vehicle.purchasePriceCad') || vehicle.purchasePriceCad <= 0) {
+    step1Missing.push('price');
+  }
+
   // Ajustement interactif de la marge depuis les résultats
   const handleTargetMarginChange = (margin: number) => {
     setTargetMargin(margin);
@@ -182,6 +729,7 @@ export function App() {
 
   // Démo en 1 clic
   const handleLoadDemo = () => {
+    setRecap(null);
     setVehicle(DEMO_VEHICLE);
     setDestination('senegal');
     const demoFinancing: FinancingConfig = {
@@ -219,6 +767,7 @@ export function App() {
 
   // Réinitialiser pour une nouvelle simulation
   const handleNewSimulation = () => {
+    setRecap(null);
     setVehicle(INITIAL_VEHICLE);
     setCurrentStep(1);
     setMaxReachedStep(1);
@@ -229,6 +778,7 @@ export function App() {
 
   // Charger une simulation depuis l'historique
   const handleSelectFromHistory = (sim: SimulationResult) => {
+    setRecap(null);
     setVehicle(sim.vehicle);
     setDestination(sim.destination);
     setFinancing(sim.financing);
@@ -294,11 +844,52 @@ export function App() {
               maxReachedStep={maxReachedStep}
             />
 
+            {/* Voice assistant status banners (Agent 5) — never block the manual form. */}
+            {voiceOn && offlineMode && (
+              <div
+                role="status"
+                className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-bold text-amber-900"
+              >
+                Offline mode — voice retries automatically. You can keep talking or type instead.
+              </div>
+            )}
+            {voiceState === 'error' && voiceError && (
+              <div
+                role="alert"
+                className="rounded-2xl border-2 border-red-400 bg-red-50 px-4 py-3 text-sm text-red-900"
+              >
+                <p className="font-bold">{voiceError}</p>
+                <p className="mt-1">You can keep filling the form manually — nothing is blocked.</p>
+              </div>
+            )}
+            {voiceOn && futureHits.length > 0 && (
+              <div
+                role="status"
+                className="flex items-center gap-2 rounded-xl border border-sky-200 bg-sky-50 px-4 py-2 text-sm text-sky-900"
+              >
+                <span aria-hidden="true" className="inline-block h-2.5 w-2.5 rounded-full bg-sky-500" />
+                <span>
+                  +{futureHits.length} infos detected for later — no need to move, review when you
+                  get there.
+                </span>
+              </div>
+            )}
+            {voiceOn && currentStep === 1 && step1Missing.length > 0 && (
+              <div
+                role="status"
+                className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700"
+              >
+                Still need: <strong>{step1Missing.join(', ')}</strong> — say it or type it.
+              </div>
+            )}
+
             {currentStep === 1 && (
               <StepVehicle
                 vehicle={vehicle}
                 onChange={(upd) => setVehicle({ ...vehicle, ...upd })}
                 onNext={() => handleStepNext(2)}
+                voiceFilled={voiceFilledFields}
+                confirmedFields={confirmedFields}
               />
             )}
 
@@ -328,18 +919,37 @@ export function App() {
             )}
 
             {currentStep === 4 && (
-              <StepTransport
-                transport={transport}
-                vehicle={vehicle}
-                country={destination}
-                purchasePriceCad={vehicle.purchasePriceCad}
-                config={config}
-                onChange={(upd) => setTransport({ ...transport, ...upd })}
-                onCalculate={handleCalculate}
-                onPrev={() => setCurrentStep(3)}
-              />
+              <>
+                {recap && (
+                  <VoiceRecapCard
+                    lines={recap.lines}
+                    onCorrect={handleCalculate}
+                    onChange={handleVoiceRecapChange}
+                  />
+                )}
+                <StepTransport
+                  transport={transport}
+                  vehicle={vehicle}
+                  country={destination}
+                  purchasePriceCad={vehicle.purchasePriceCad}
+                  config={config}
+                  onChange={(upd) => setTransport({ ...transport, ...upd })}
+                  onCalculate={handleCalculateGated}
+                  onPrev={() => setCurrentStep(3)}
+                />
+              </>
             )}
           </div>
+        )}
+
+        {/* Global voice bubble (Agent 5): visible on wizard steps 1-4, only when enabled via .env. */}
+        {VOICE_ASSISTANT_ENABLED && currentTab === 'wizard' && currentStep >= 1 && currentStep <= 4 && (
+          <VoiceAssistantBubble
+            state={voiceState}
+            onToggle={handleVoiceToggle}
+            nextPrompt={nextPrompt}
+            errorMsg={voiceError ?? undefined}
+          />
         )}
 
         {/* VUE 2 : Tableau de bord de résultats */}
