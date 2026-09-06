@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "test": "tsx test_calculations.ts"
+    "test": "tsx test_calculations.ts && tsx tests/e2e-prefill.test.ts"
   },
   "dependencies": {
     "clsx": "^2.1.1",

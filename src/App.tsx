@@ -11,6 +11,7 @@ import {
 import { loadStoredConfig, saveStoredConfig } from './services/storageService';
 import { calculateSimulation } from './services/calculationEngine';
 import { fetchLiveFxRates } from './services/liveDataService';
+import { parsePrefillFromUrl, type PrefillMeta } from './services/prefill';
 import { DEMO_VEHICLE } from './data/defaultData';
 import { Header } from './components/common/Header';
 import { WizardStepper } from './components/wizard/WizardStepper';
@@ -73,6 +74,7 @@ export function App() {
     }
   });
   const [targetMargin, setTargetMargin] = useState<number>(18);
+  const [prefillMeta, setPrefillMeta] = useState<PrefillMeta | null>(null);
 
   // Résultat actuel
   const [currentResult, setCurrentResult] = useState<SimulationResult | null>(null);
@@ -80,6 +82,26 @@ export function App() {
   // Récupération des taux de change en direct au montage
   useEffect(() => {
     handleRefreshLiveRates();
+  }, []);
+
+  useEffect(() => {
+    try {
+      const payload = parsePrefillFromUrl(window.location.href);
+      if (!payload) return;
+      setVehicle(payload.vehicle);
+      setDestination(payload.destination);
+      setFinancing(payload.financing);
+      setTransport(payload.transport);
+      setCustoms(payload.customs);
+      setTargetMargin(payload.targetMarginPercent);
+      setCurrentResult(null);
+      setCurrentTab('wizard');
+      setCurrentStep(1);
+      setMaxReachedStep(1);
+      setPrefillMeta(payload.meta);
+    } catch (error) {
+      console.warn('[prefill] lien ignoré', error);
+    }
   }, []);
 
   const handleRefreshLiveRates = async () => {
@@ -240,6 +262,32 @@ export function App() {
         {/* VUE 1 : Formulaire Wizard linéaire */}
         {currentTab === 'wizard' && (
           <div className="space-y-6">
+            {prefillMeta && (
+              <div
+                className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border border-brand-200 bg-[hsl(var(--surface))] px-4 py-3 text-sm text-slate-700 shadow-sm"
+                role="status"
+              >
+                <span>
+                  Pré-rempli depuis l’annonce <strong className="font-bold text-slate-950">{prefillMeta.listingTitle}</strong>. Vérifiez les champs avant le calcul.
+                </span>
+                <a
+                  href={prefillMeta.listingUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-bold text-brand-700 underline underline-offset-4 hover:text-brand-800"
+                >
+                  Voir l’annonce d’origine
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setPrefillMeta(null)}
+                  className="ml-auto rounded-lg px-2 py-1 font-bold text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                  aria-label="Masquer le bandeau de préremplissage"
+                >
+                  OK
+                </button>
+              </div>
+            )}
             <WizardStepper
               currentStep={currentStep}
               onSelectStep={setCurrentStep}

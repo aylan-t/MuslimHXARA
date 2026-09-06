@@ -26,6 +26,7 @@ export function checkEligibility(
 ): { isEligible: boolean; severity: 'success' | 'warning' | 'error'; message: string } {
   const age = CURRENT_YEAR - vehicle.year;
   const isTruck = vehicle.category === 'camionnette';
+  const ageLabel = age <= 0 ? "moins d'un an" : `${age} an(s)`;
 
   if (country === 'senegal') {
     const maxAge = isTruck
@@ -36,7 +37,7 @@ export function checkEligibility(
       return {
         isEligible: false,
         severity: 'error',
-        message: `VÉHICULE NON IMPORTABLE AU SÉNÉGAL : Ce véhicule a ${age} an(s). Selon le décret officiel du 24 octobre 2025 (n° 2025-1845), la limite légale stricte est de ${maxAge} ans (année minimum autorisée : ${CURRENT_YEAR - maxAge}). Tout véhicule plus ancien est refoulé sans dédouanement au port de Dakar.`
+        message: `VÉHICULE NON IMPORTABLE AU SÉNÉGAL : Ce véhicule a ${ageLabel}. Selon le décret officiel du 24 octobre 2025 (n° 2025-1845), la limite légale stricte est de ${maxAge} ans (année minimum autorisée : ${CURRENT_YEAR - maxAge}). Tout véhicule plus ancien est refoulé sans dédouanement au port de Dakar.`
       };
     }
 
@@ -44,14 +45,14 @@ export function checkEligibility(
       return {
         isEligible: true,
         severity: 'warning',
-        message: `ATTENTION ÉCHÉANCE : Ce véhicule a ${age} an(s) (limite légale : ${maxAge} ans). Assurez-vous impérativement qu'il arrive et soit enregistré au port de Dakar avant le 31 décembre pour éviter le passage à ${age + 1} ans et un refus douanier.`
+        message: `ATTENTION ÉCHÉANCE : Ce véhicule a ${ageLabel} (limite légale : ${maxAge} ans). Assurez-vous impérativement qu'il arrive et soit enregistré au port de Dakar avant le 31 décembre pour éviter le passage à ${age + 1} ans et un refus douanier.`
       };
     }
 
     return {
       isEligible: true,
       severity: 'success',
-      message: `VÉHICULE PLEINEMENT ÉLIGIBLE AU SÉNÉGAL : Ce véhicule a ${age} an(s), en parfaite conformité avec le décret officiel du 24 octobre 2025 (limite max : ${maxAge} ans pour tourisme).`
+      message: `VÉHICULE PLEINEMENT ÉLIGIBLE AU SÉNÉGAL : Ce véhicule a ${ageLabel}, en parfaite conformité avec le décret officiel du 24 octobre 2025 (limite max : ${maxAge} ans pour tourisme).`
     };
   }
 
@@ -63,7 +64,7 @@ export function checkEligibility(
       return {
         isEligible: false,
         severity: 'error',
-        message: `NON ÉLIGIBLE AU RÉGIME MRE : L'abattement préférentiel MRE de 90% exige impérativement un véhicule de ${maxMreAge} ans maximum (année ${CURRENT_YEAR - maxMreAge} ou plus récente). Ce véhicule a ${age} an(s).`
+        message: `NON ÉLIGIBLE AU RÉGIME MRE : L'abattement préférentiel MRE de 90% exige impérativement un véhicule de ${maxMreAge} ans maximum (année ${CURRENT_YEAR - maxMreAge} ou plus récente). Ce véhicule a ${ageLabel}.`
       };
     }
     const hasConfirmedConditions = Boolean(
@@ -81,7 +82,7 @@ export function checkEligibility(
     return {
       isEligible: true,
       severity: 'success',
-      message: `CONDITIONS MRE DÉCLARÉES : véhicule de ${age} an(s) et critères déclaratifs confirmés. L'abattement est appliqué à la simulation, sous réserve de validation documentaire par la douane.`
+      message: `CONDITIONS MRE DÉCLARÉES : véhicule de ${ageLabel} et critères déclaratifs confirmés. L'abattement est appliqué à la simulation, sous réserve de validation documentaire par la douane.`
     };
   }
 
