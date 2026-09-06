@@ -77,6 +77,21 @@ Documentation interactive Swagger disponible sur [http://localhost:8000/docs](ht
 Le moteur de calcul et les règles légales sont validés par la suite de tests :
 
 ```bash
-node test_calculations.mjs
+npm test
 ```
+
+## Extension Chrome v1.3.1
+
+```bash
+cd marketplace-extension
+npm install
+npm run sync:extension-engine
+npm test
+npm run typecheck
+npm run build
+```
+
+Chargez ensuite `marketplace-extension/dist-extension/` depuis
+`chrome://extensions` en mode développeur. L'application cible par défaut
+`http://localhost:3000` et accepte le préremplissage sécurisé `?prefill=`.
 

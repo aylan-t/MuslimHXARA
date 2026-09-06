@@ -1,0 +1,628 @@
+// AUTO-GÉNÉRÉ par scripts/sync-engine.mjs — NE PAS ÉDITER.
+// Source : src/data/defaultData.ts · EXTENSION_ENGINE_VERSION=89cf23b1def5a0e1ef9bff58e679eff3d3db2ff9 · sync=2026-09-06T06:13:47.247Z
+import { GlobalReferenceConfig, PreloadedVehicle, Vehicle, QuebecOriginRegion, OfficialSource } from './types';
+
+export const QUEBEC_REGIONS: QuebecOriginRegion[] = [
+  {
+    id: 'grand-montreal',
+    name: 'Grand Montréal & Couronnes',
+    citiesDescription: 'Montréal, Laval, Longueuil, Mirabel, Terrebonne, Brossard',
+    distanceToMtlKm: 35,
+    costToMtlCad: 200,
+    distanceToHalifaxKm: 1240,
+    costToHalifaxCad: 1250
+  },
+  {
+    id: 'centre-quebec',
+    name: 'Mauricie & Centre-du-Québec',
+    citiesDescription: 'Trois-Rivières, Drummondville, Victoriaville, Saint-Maurice',
+    distanceToMtlKm: 140,
+    costToMtlCad: 380,
+    distanceToHalifaxKm: 1120,
+    costToHalifaxCad: 1100
+  },
+  {
+    id: 'quebec-levis',
+    name: 'Capitale-Nationale & Lévis',
+    citiesDescription: 'Ville de Québec, Lévis, Sainte-Foy, Beauport, Saint-Nicolas',
+    distanceToMtlKm: 260,
+    costToMtlCad: 480,
+    distanceToHalifaxKm: 980,
+    costToHalifaxCad: 950
+  },
+  {
+    id: 'estrie',
+    name: 'Estrie & Cantons-de-l\'Est',
+    citiesDescription: 'Sherbrooke, Magog, Granby, Cowansville',
+    distanceToMtlKm: 160,
+    costToMtlCad: 420,
+    distanceToHalifaxKm: 1150,
+    costToHalifaxCad: 1280
+  },
+  {
+    id: 'outaouais',
+    name: 'Outaouais & Laurentides',
+    citiesDescription: 'Gatineau, Hull, Saint-Jérôme, Saint-Sauveur',
+    distanceToMtlKm: 210,
+    costToMtlCad: 520,
+    distanceToHalifaxKm: 1420,
+    costToHalifaxCad: 1450
+  },
+  {
+    id: 'saguenay',
+    name: 'Saguenay–Lac-Saint-Jean',
+    citiesDescription: 'Saguenay, Chicoutimi, Jonquière, Alma',
+    distanceToMtlKm: 470,
+    costToMtlCad: 750,
+    distanceToHalifaxKm: 1180,
+    costToHalifaxCad: 1200
+  },
+  {
+    id: 'bas-saint-laurent',
+    name: 'Bas-Saint-Laurent & Gaspésie',
+    citiesDescription: 'Rimouski, Rivière-du-Loup, Matane, Mont-Joli',
+    distanceToMtlKm: 540,
+    costToMtlCad: 850,
+    distanceToHalifaxKm: 720,
+    costToHalifaxCad: 750 // Plus proche d'Halifax que de Montréal !
+  }
+];
+
+export const OFFICIAL_SOURCES: OfficialSource[] = [
+  {
+    id: 'bdc-fx',
+    title: 'Taux de change officiels quotidiens',
+    institution: 'Banque du Canada',
+    countryCode: 'QC',
+    url: 'https://www.banqueducanada.ca/taux/taux-de-change/',
+    description: 'Taux interbancaires de référence du dollar canadien face aux principales devises internationales.',
+    legalReference: 'Rapport quotidien des marchés des changes - Banque du Canada',
+    lastVerified: '2026-03-01'
+  },
+  {
+    id: 'douanes-sn',
+    title: 'Réglementation et Décret d\'importation des véhicules',
+    institution: 'Direction Générale des Douanes du Sénégal',
+    countryCode: 'SN',
+    url: 'https://www.douanes.sn/',
+    description: 'Système automatisé de dédouanement GAINDE. Texte du Décret n° 2025-1845 fixant l\'âge limite à 10 ans.',
+    legalReference: 'Décret n° 2025-1845 du 24 octobre 2025 & Code des Douanes du Sénégal',
+    lastVerified: '2026-01-15'
+  },
+  {
+    id: 'douanes-ma',
+    title: 'Tarif douanier BADR & Régime MRE',
+    institution: 'Administration des Douanes et Impôts Indirects (ADII Maroc)',
+    countryCode: 'MA',
+    url: 'https://www.douane.gov.ma/',
+    description: 'Système BADR : Droits d\'importation, TVA et conditions d\'abattement de 90% pour les retraités MRE de 60 ans+.',
+    legalReference: 'Circulaire ADII n° 5980/311 relative au dédouanement des véhicules de tourisme MRE',
+    lastVerified: '2026-01-15'
+  },
+  {
+    id: 'port-mtl',
+    title: 'Tarifs et lignes d\'embarquement RoRo',
+    institution: 'Administration Portuaire de Montréal',
+    countryCode: 'QC',
+    url: 'https://www.port-montreal.com/',
+    description: 'Terminaux de manutention automobile et exportations maritimes vers l\'Atlantique et l\'Afrique.',
+    legalReference: 'Tarif d\'usage portuaire et sûreté maritime - Port de Montréal',
+    lastVerified: '2026-02-01'
+  },
+  {
+    id: 'port-halifax',
+    title: 'Terminal maritime RoRo & Conteneurs',
+    institution: 'Halifax Port Authority',
+    countryCode: 'QC',
+    url: 'https://www.portofhalifax.ca/',
+    description: 'Premier port canadien d\'eaux profondes pour navires rouliers (RoRo) vers Casablanca et Dakar.',
+    legalReference: 'Port of Halifax Tariff Notice',
+    lastVerified: '2026-02-01'
+  },
+  {
+    id: 'port-dakar',
+    title: 'Barème de débarquement et stationnement (PAD)',
+    institution: 'Port Autonome de Dakar',
+    countryCode: 'SN',
+    url: 'https://www.portdakar.sn/',
+    description: 'Tarifs de manutention à quai, terre-pleins rouliers et frais de magasinage journalier (surestaries).',
+    legalReference: 'Barème officiel de facturation PAD',
+    lastVerified: '2026-01-20'
+  }
+];
+
+export const PRELOADED_VEHICLES: PreloadedVehicle[] = [
+  {
+    id: 'rav4-2018',
+    label: 'Toyota RAV4 2018 (VUS le plus recherché)',
+    brand: 'Toyota',
+    model: 'RAV4',
+    year: 2018,
+    purchasePriceCad: 14200,
+    estimatedArgusCustomsCad: 16800, // Cote douanière officielle
+    mileageKm: 115000,
+    category: 'suv',
+    condition: 'tres_bon',
+    source: 'encan'
+  },
+  {
+    id: 'corolla-2017',
+    label: 'Toyota Corolla 2017 (Berline populaire & robuste)',
+    brand: 'Toyota',
+    model: 'Corolla',
+    year: 2017,
+    purchasePriceCad: 10500,
+    estimatedArgusCustomsCad: 12200,
+    mileageKm: 130000,
+    category: 'berline',
+    condition: 'bon',
+    source: 'particulier'
+  },
+  {
+    id: 'crv-2019',
+    label: 'Honda CR-V 2019 (VUS familial confortable)',
+    brand: 'Honda',
+    model: 'CR-V',
+    year: 2019,
+    purchasePriceCad: 16800,
+    estimatedArgusCustomsCad: 19500,
+    mileageKm: 95000,
+    category: 'suv',
+    condition: 'tres_bon',
+    source: 'encan'
+  },
+  {
+    id: 'civic-2018',
+    label: 'Honda Civic 2018 (Berline économique & demandée)',
+    brand: 'Honda',
+    model: 'Civic',
+    year: 2018,
+    purchasePriceCad: 11200,
+    estimatedArgusCustomsCad: 13000,
+    mileageKm: 110000,
+    category: 'berline',
+    condition: 'bon',
+    source: 'particulier'
+  },
+  {
+    id: 'tucson-2018',
+    label: 'Hyundai Tucson 2018 (Excellent rapport prix/revente)',
+    brand: 'Hyundai',
+    model: 'Tucson',
+    year: 2018,
+    purchasePriceCad: 12900,
+    estimatedArgusCustomsCad: 15200,
+    mileageKm: 105000,
+    category: 'suv',
+    condition: 'tres_bon',
+    source: 'encan'
+  },
+  {
+    id: 'escape-2017',
+    label: 'Ford Escape 2017 (Entrée de gamme abordable)',
+    brand: 'Ford',
+    model: 'Escape',
+    year: 2017,
+    purchasePriceCad: 9800,
+    estimatedArgusCustomsCad: 11800,
+    mileageKm: 125000,
+    category: 'suv',
+    condition: 'bon',
+    source: 'particulier'
+  },
+  {
+    id: 'highlander-2017',
+    label: 'Toyota Highlander 2017 (Grand VUS 7 places)',
+    brand: 'Toyota',
+    model: 'Highlander',
+    year: 2017,
+    purchasePriceCad: 21500,
+    estimatedArgusCustomsCad: 24500,
+    mileageKm: 135000,
+    category: 'suv',
+    condition: 'tres_bon',
+    source: 'encan'
+  },
+  {
+    id: 'rogue-2018',
+    label: 'Nissan Rogue 2018 (VUS spacieux & grande disponibilité)',
+    brand: 'Nissan',
+    model: 'Rogue',
+    year: 2018,
+    purchasePriceCad: 11400,
+    estimatedArgusCustomsCad: 13500,
+    mileageKm: 118000,
+    category: 'suv',
+    condition: 'bon',
+    source: 'encan'
+  },
+  {
+    id: 'cx5-2018',
+    label: 'Mazda CX-5 2018 (Style moderne & belle finition)',
+    brand: 'Mazda',
+    model: 'CX-5',
+    year: 2018,
+    purchasePriceCad: 13600,
+    estimatedArgusCustomsCad: 15800,
+    mileageKm: 108000,
+    category: 'suv',
+    condition: 'tres_bon',
+    source: 'particulier'
+  },
+  {
+    id: 'sportage-2019',
+    label: 'Kia Sportage 2019 (VUS récent bien équipé)',
+    brand: 'Kia',
+    model: 'Sportage',
+    year: 2019,
+    purchasePriceCad: 13100,
+    estimatedArgusCustomsCad: 15000,
+    mileageKm: 98000,
+    category: 'suv',
+    condition: 'tres_bon',
+    source: 'encan'
+  }
+];
+
+export const DEFAULT_CONFIG: GlobalReferenceConfig = {
+  fxRates: {
+    CAD_to_MAD: 7.35,
+    CAD_to_XOF: 440.0,
+    defaultSpreadPercent: 2.5,
+    lastUpdated: '2026-03-01',
+    isLive: false,
+    officialSourceUrl: 'https://www.banqueducanada.ca/taux/taux-de-change/'
+  },
+  quebecRegions: QUEBEC_REGIONS,
+  officialSources: OFFICIAL_SOURCES,
+  transferMethods: [
+    {
+      id: 'plateforme_transfert',
+      name: 'Plateforme spécialisée (Wise, Remitly, etc.)',
+      fixedFeeCad: 15,
+      variableFeePercent: 0.7,
+      typicalSpreadPercent: 1.2,
+      recommended: true,
+      description: 'Taux de change réel avec spread minimal et transparence totale.',
+      advantages: 'Un écart de change plus faible peut réduire sensiblement le coût total du transfert.',
+      disadvantages: 'Nécessite la création préalable d\'un compte vérifié en ligne.'
+    },
+    {
+      id: 'virement_bancaire',
+      name: 'Virement bancaire international classique (SWIFT)',
+      fixedFeeCad: 45,
+      variableFeePercent: 0.5,
+      typicalSpreadPercent: 3.4,
+      recommended: false,
+      description: 'Banques canadiennes traditionnelles (Desjardins, RBC, TD, BMO).',
+      advantages: 'Sécuritaire, direct depuis votre compte chèque existant sans nouvel intermédiaire.',
+      disadvantages: 'Où vous perdez : La banque applique une commission de change cachée (spread de 3% à 4%) qui ampute lourdement votre marge brute.'
+    },
+    {
+      id: 'interac_autre',
+      name: 'Transfert express / Agent de change',
+      fixedFeeCad: 30,
+      variableFeePercent: 1.2,
+      typicalSpreadPercent: 2.8,
+      recommended: false,
+      description: 'Réseaux de transfert physique et courtiers locaux.',
+      advantages: 'Fonds disponibles quasi immédiatement au guichet local à destination.',
+      disadvantages: 'Frais de transaction plus élevés sur les montants de plus de 10 000 $.'
+    }
+  ],
+  customsRules: {
+    senegal: {
+      maxAgeYearsTourism: 10,
+      maxAgeYearsTrucks: 15,
+      taxRatePercent: 44.5,
+      legalBasis: 'Décret n° 2025-1845 du 24 octobre 2025 (limite stricte 10 ans)',
+      lastUpdated: '2026-01-15',
+      officialSourceUrl: 'https://www.douanes.sn/'
+    },
+    morocco: {
+      standardImportRatePercent: 17.5,
+      vatRatePercent: 20.0,
+      parafiscalRatePercent: 0.25,
+      mreMaxAgeYears: 5,
+      mreMaxDiscountPercent: 90.0,
+      legalWarning: 'AVERTISSEMENT LÉGAL : L\'importation commerciale classique au Maroc est strictement encadrée et soumise à agrément. Le régime avantageux s\'applique principalement aux Marocains Résidant à l\'Étranger (MRE) de 60 ans et plus (véhicule de 5 ans maximum, abattement de 90%). Vérifiez obligatoirement auprès des douanes marocaines avant achat.',
+      lastUpdated: '2026-01-15',
+      officialSourceUrl: 'https://www.douane.gov.ma/'
+    }
+  },
+  routes: [
+    {
+      id: 'mtl-dkr-roro',
+      originPort: 'Port de Montréal (QC)',
+      destinationPort: 'Port Autonome de Dakar',
+      destinationCountry: 'senegal',
+      mode: 'roro',
+      name: 'Montréal → Dakar (Navire Roulier RoRo direct)',
+      inlandOriginCad: 200,
+      portOriginFeesCad: 350,
+      oceanFreightCad: 2400,
+      marineInsuranceRatePercent: 1.5,
+      portDestinationFeesCad: 450,
+      inlandDestinationCad: 200,
+      estimatedDays: 21,
+      recommended: true,
+      priceNote: 'Route directe classique la plus simple depuis le Grand Montréal',
+      officialSourceUrl: 'https://www.port-montreal.com/',
+      priceStatus: 'estimate',
+      pricingSourceName: 'Hypothèse de travail à confirmer par devis transporteur',
+      pricingLastVerified: '2026-03-01',
+      pricingNote: 'Les ports ne publient pas le prix maritime complet du transporteur.'
+    },
+    {
+      id: 'hal-dkr-roro',
+      originPort: 'Port d\'Halifax (NS)',
+      destinationPort: 'Port Autonome de Dakar',
+      destinationCountry: 'senegal',
+      mode: 'roro',
+      name: 'Halifax → Dakar (RoRo via port atlantique)',
+      inlandOriginCad: 1250,
+      portOriginFeesCad: 250,
+      oceanFreightCad: 1900,
+      marineInsuranceRatePercent: 1.5,
+      portDestinationFeesCad: 400,
+      inlandDestinationCad: 200,
+      estimatedDays: 17,
+      recommended: false,
+      priceNote: 'Traversée maritime rapide (17j) - très avantageux pour les véhicules de l\'Est du Québec',
+      officialSourceUrl: 'https://www.portofhalifax.ca/',
+      priceStatus: 'estimate',
+      pricingSourceName: 'Hypothèse de travail à confirmer par devis transporteur',
+      pricingLastVerified: '2026-03-01',
+      pricingNote: 'Le tarif final dépend du transporteur, du navire et du véhicule.'
+    },
+    {
+      id: 'mtl-dkr-cont40',
+      originPort: 'Port de Montréal (QC)',
+      destinationPort: 'Port Autonome de Dakar',
+      destinationCountry: 'senegal',
+      mode: 'conteneur_complet',
+      name: 'Montréal → Dakar (Conteneur 40 pieds complet - Groupage)',
+      inlandOriginCad: 350,
+      portOriginFeesCad: 600,
+      oceanFreightCad: 5400,
+      marineInsuranceRatePercent: 1.5,
+      portDestinationFeesCad: 800,
+      inlandDestinationCad: 350,
+      estimatedDays: 24,
+      recommended: false,
+      priceNote: 'Coût partagé : très rentable dès 3 voitures (environ 1 880 $ / voiture)',
+      officialSourceUrl: 'https://www.port-montreal.com/',
+      priceStatus: 'estimate',
+      pricingSourceName: 'Hypothèse de travail à confirmer par devis transporteur',
+      pricingLastVerified: '2026-03-01',
+      pricingNote: 'Le coût doit être remplacé par un devis officiel de conteneur.'
+    },
+    {
+      id: 'mtl-casa-roro',
+      originPort: 'Port de Montréal (QC)',
+      destinationPort: 'Port de Casablanca',
+      destinationCountry: 'maroc',
+      mode: 'roro',
+      name: 'Montréal → Casablanca (RoRo standard)',
+      inlandOriginCad: 200,
+      portOriginFeesCad: 350,
+      oceanFreightCad: 2600,
+      marineInsuranceRatePercent: 1.5,
+      portDestinationFeesCad: 500,
+      inlandDestinationCad: 250,
+      estimatedDays: 23,
+      recommended: true,
+      priceNote: 'Liaison directe régulière vers Casablanca',
+      officialSourceUrl: 'https://www.port-montreal.com/',
+      priceStatus: 'estimate',
+      pricingSourceName: 'Hypothèse de travail à confirmer par devis transporteur',
+      pricingLastVerified: '2026-03-01',
+      pricingNote: 'Aucun tarif transporteur public vérifié n’est associé à cette route.'
+    },
+    {
+      id: 'hal-tanger-roro',
+      originPort: 'Port d\'Halifax (NS)',
+      destinationPort: 'Tanger Med',
+      destinationCountry: 'maroc',
+      mode: 'roro',
+      name: 'Halifax → Tanger Med (RoRo express)',
+      inlandOriginCad: 1250,
+      portOriginFeesCad: 250,
+      oceanFreightCad: 2150,
+      marineInsuranceRatePercent: 1.5,
+      portDestinationFeesCad: 450,
+      inlandDestinationCad: 250,
+      estimatedDays: 16,
+      recommended: false,
+      priceNote: 'Traversée maritime express de 16 jours vers le hub Tanger Med',
+      officialSourceUrl: 'https://www.tangermed.ma/',
+      priceStatus: 'estimate',
+      pricingSourceName: 'Hypothèse de travail à confirmer par devis transporteur',
+      pricingLastVerified: '2026-03-01',
+      pricingNote: 'Tanger Med est une source portuaire, pas un devis de fret.'
+    },
+    {
+      id: 'mtl-casa-cont40',
+      originPort: 'Port de Montréal (QC)',
+      destinationPort: 'Port de Casablanca',
+      destinationCountry: 'maroc',
+      mode: 'conteneur_complet',
+      name: 'Montréal → Casablanca (Conteneur 40 pieds complet)',
+      inlandOriginCad: 350,
+      portOriginFeesCad: 600,
+      oceanFreightCad: 5800,
+      marineInsuranceRatePercent: 1.5,
+      portDestinationFeesCad: 850,
+      inlandDestinationCad: 400,
+      estimatedDays: 26,
+      recommended: false,
+      priceNote: 'Idéal pour envoi groupé de 3 à 4 véhicules sécurisés',
+      officialSourceUrl: 'https://www.port-montreal.com/',
+      priceStatus: 'estimate',
+      pricingSourceName: 'Hypothèse de travail à confirmer par devis transporteur',
+      pricingLastVerified: '2026-03-01',
+      pricingNote: 'Le coût doit être remplacé par un devis officiel de conteneur.'
+    }
+  ],
+  marketData: [
+    {
+      id: 'rav4-senegal',
+      country: 'senegal',
+      brand: 'Toyota',
+      model: 'RAV4',
+      yearMin: 2017,
+      yearMax: 2020,
+      averagePriceLocal: 16500000,
+      currency: 'XOF',
+      source: 'Dakar-Auto.com / Expat-Dakar',
+      lastUpdated: '2026-02-15'
+    },
+    {
+      id: 'rav4-maroc',
+      country: 'maroc',
+      brand: 'Toyota',
+      model: 'RAV4',
+      yearMin: 2017,
+      yearMax: 2020,
+      averagePriceLocal: 260000,
+      currency: 'MAD',
+      source: 'Avito.ma / Moteur.ma',
+      lastUpdated: '2026-02-15'
+    },
+    {
+      id: 'corolla-senegal',
+      country: 'senegal',
+      brand: 'Toyota',
+      model: 'Corolla',
+      yearMin: 2016,
+      yearMax: 2019,
+      averagePriceLocal: 9800000,
+      currency: 'XOF',
+      source: 'Dakar-Auto.com / CoinAfrique',
+      lastUpdated: '2026-02-15'
+    },
+    {
+      id: 'corolla-maroc',
+      country: 'maroc',
+      brand: 'Toyota',
+      model: 'Corolla',
+      yearMin: 2016,
+      yearMax: 2019,
+      averagePriceLocal: 165000,
+      currency: 'MAD',
+      source: 'Avito.ma / Moteur.ma',
+      lastUpdated: '2026-02-15'
+    },
+    {
+      id: 'crv-senegal',
+      country: 'senegal',
+      brand: 'Honda',
+      model: 'CR-V',
+      yearMin: 2017,
+      yearMax: 2020,
+      averagePriceLocal: 15800000,
+      currency: 'XOF',
+      source: 'Dakar-Auto.com',
+      lastUpdated: '2026-02-15'
+    },
+    {
+      id: 'crv-maroc',
+      country: 'maroc',
+      brand: 'Honda',
+      model: 'CR-V',
+      yearMin: 2017,
+      yearMax: 2020,
+      averagePriceLocal: 245000,
+      currency: 'MAD',
+      source: 'Avito.ma',
+      lastUpdated: '2026-02-15'
+    },
+    {
+      id: 'civic-senegal',
+      country: 'senegal',
+      brand: 'Honda',
+      model: 'Civic',
+      yearMin: 2016,
+      yearMax: 2019,
+      averagePriceLocal: 9200000,
+      currency: 'XOF',
+      source: 'CoinAfrique',
+      lastUpdated: '2026-02-15'
+    },
+    {
+      id: 'civic-maroc',
+      country: 'maroc',
+      brand: 'Honda',
+      model: 'Civic',
+      yearMin: 2016,
+      yearMax: 2019,
+      averagePriceLocal: 155000,
+      currency: 'MAD',
+      source: 'Avito.ma',
+      lastUpdated: '2026-02-15'
+    },
+    {
+      id: 'tucson-senegal',
+      country: 'senegal',
+      brand: 'Hyundai',
+      model: 'Tucson',
+      yearMin: 2017,
+      yearMax: 2020,
+      averagePriceLocal: 14200000,
+      currency: 'XOF',
+      source: 'Dakar-Auto.com',
+      lastUpdated: '2026-02-15'
+    },
+    {
+      id: 'tucson-maroc',
+      country: 'maroc',
+      brand: 'Hyundai',
+      model: 'Tucson',
+      yearMin: 2017,
+      yearMax: 2020,
+      averagePriceLocal: 225000,
+      currency: 'MAD',
+      source: 'Avito.ma',
+      lastUpdated: '2026-02-15'
+    },
+    {
+      id: 'escape-senegal',
+      country: 'senegal',
+      brand: 'Ford',
+      model: 'Escape',
+      yearMin: 2016,
+      yearMax: 2019,
+      averagePriceLocal: 11500000,
+      currency: 'XOF',
+      source: 'Dakar-Auto.com',
+      lastUpdated: '2026-02-15'
+    },
+    {
+      id: 'escape-maroc',
+      country: 'maroc',
+      brand: 'Ford',
+      model: 'Escape',
+      yearMin: 2016,
+      yearMax: 2019,
+      averagePriceLocal: 180000,
+      currency: 'MAD',
+      source: 'Avito.ma',
+      lastUpdated: '2026-02-15'
+    }
+  ]
+};
+
+export const DEMO_VEHICLE: Vehicle = {
+  brand: PRELOADED_VEHICLES[0].brand,
+  model: PRELOADED_VEHICLES[0].model,
+  year: PRELOADED_VEHICLES[0].year,
+  purchasePriceCad: PRELOADED_VEHICLES[0].purchasePriceCad,
+  mileageKm: PRELOADED_VEHICLES[0].mileageKm,
+  category: PRELOADED_VEHICLES[0].category,
+  condition: PRELOADED_VEHICLES[0].condition,
+  source: PRELOADED_VEHICLES[0].source,
+  auctionFeesCad: 650,
+  brokerCommissionCad: 300,
+  originRegionId: 'grand-montreal',
+  isNonRunning: false
+};

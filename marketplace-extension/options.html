@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<!-- AGENT-05 — Page d'options : BASE URL app + destination + méthode par défaut.
+     Persistés via chrome.storage.local (voir src/options.ts compilé en options.js).
+     Page autonome : styles inline, aucun CSS distant (MV3). -->
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AutoTransat QC — Options de l'extension</title>
+  <style>
+    body { font-family: Inter, system-ui, sans-serif; background: #0f172a; color: #f1f5f9; margin: 0; padding: 24px; }
+    main { max-width: 520px; margin: 0 auto; background: rgba(30,41,59,.6); border: 1px solid #334155; border-radius: 1rem; padding: 20px; }
+    h1 { font-size: 18px; margin: 0 0 4px; }
+    p.sub { color: #94a3b8; font-size: 12px; margin: 0 0 16px; }
+    label { display: block; font-size: 12px; font-weight: 700; margin: 12px 0 4px; }
+    input, select { width: 100%; box-sizing: border-box; background: #0f172a; color: #f1f5f9; border: 1px solid #334155; border-radius: .6rem; padding: 8px 10px; font-size: 13px; }
+    button { margin-top: 16px; background: #0284c7; border: 1px solid #0284c7; color: #fff; border-radius: .75rem; padding: 9px 16px; font-weight: 800; cursor: pointer; }
+    #axc-status { margin-top: 10px; font-size: 12px; color: #4ade80; min-height: 1.2em; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>AutoTransat QC — Options</h1>
+    <p class="sub">Deep link « Compléter → » et valeurs par défaut de l'overlay. Stockage local uniquement.</p>
+    <form id="axc-options-form">
+      <label for="axc-base-url">BASE URL de l'application</label>
+      <input id="axc-base-url" name="baseUrl" type="url" inputmode="url"
+             placeholder="http://localhost:3000" autocomplete="off" spellcheck="false" />
+
+      <label for="axc-destination">Destination par défaut</label>
+      <select id="axc-destination" name="destination">
+        <option value="senegal">Sénégal (Dakar)</option>
+        <option value="maroc">Maroc (Casablanca / Tanger Med)</option>
+      </select>
+
+      <label for="axc-method">Méthode de transfert par défaut</label>
+      <select id="axc-method" name="transferMethod">
+        <option value="plateforme_transfert">Plateforme spécialisée (Wise, Remitly…)</option>
+        <option value="virement_bancaire">Virement bancaire international (SWIFT)</option>
+        <option value="interac_autre">Transfert express / Agent de change</option>
+      </select>
+
+      <button id="axc-save" type="submit">Enregistrer</button>
+      <div id="axc-status" role="status" aria-live="polite"></div>
+    </form>
+  </main>
+  <script type="module" src="./options.js"></script>
+</body>
+</html>
