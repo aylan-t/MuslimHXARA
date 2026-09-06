@@ -33,7 +33,12 @@ export const StepTransport: React.FC<StepTransportProps> = ({
   const availableRoutes = routes.filter(r => r.destinationCountry === country);
   const selectedRoute = availableRoutes.find(r => r.id === transport?.routeId) || availableRoutes[0] || routes[0] || DEFAULT_CONFIG.routes[0];
   const isContainer = selectedRoute ? (selectedRoute.mode === 'conteneur_complet' || selectedRoute.mode === 'conteneur_partage') : false;
-  const quoteIsCurrent = !transport.quote?.validUntil || transport.quote.validUntil >= new Date().toISOString().slice(0, 10);
+  const today = new Date().toISOString().slice(0, 10);
+  const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const quoteIsCurrent = Boolean(
+    transport.quote?.validUntil
+    && transport.quote.validUntil > today
+  );
   const activeQuote = transport.quote?.routeId === selectedRoute.id
     && transport.quote.amountCad > 0
     && Boolean(transport.quote.carrierName.trim())
@@ -43,7 +48,13 @@ export const StepTransport: React.FC<StepTransportProps> = ({
     && quoteIsCurrent
     ? transport.quote
     : undefined;
-  const activeMarketOffer = transport.marketOffer?.routeId === selectedRoute.id && transport.marketOffer.amountCad > 0
+  const marketOfferIsCurrent = Boolean(
+    transport.marketOffer?.validUntil
+    && new Date(transport.marketOffer.validUntil).getTime() > Date.now()
+  );
+  const activeMarketOffer = transport.marketOffer?.routeId === selectedRoute.id
+    && transport.marketOffer.amountCad > 0
+    && marketOfferIsCurrent
     ? transport.marketOffer
     : undefined;
 
@@ -135,6 +146,7 @@ export const StepTransport: React.FC<StepTransportProps> = ({
         fileName: file.name,
         fileHash,
         fileMimeType: file.type,
+        validUntil: transport.quote?.validUntil,
       },
     });
   };
@@ -164,6 +176,8 @@ export const StepTransport: React.FC<StepTransportProps> = ({
           routes={availableRoutes}
           selectedRouteId={selectedRoute.id}
           vehicleCount={batchCount}
+          vehicle={vehicle}
+          country={country}
           selectedOffer={activeMarketOffer}
           onSelectRoute={(routeId) => onChange({
             routeId,
@@ -216,7 +230,7 @@ export const StepTransport: React.FC<StepTransportProps> = ({
                               : 'bg-amber-100 text-amber-900'
                         }`}>
                           {activeQuote && route.id === selectedRoute.id
-                            ? 'Devis transporteur saisi'
+                            ? 'Devis fourni (non vérifié)'
                             : activeMarketOffer && route.id === selectedRoute.id
                               ? 'Tarif marketplace'
                               : 'Budget indicatif'}
@@ -245,7 +259,7 @@ export const StepTransport: React.FC<StepTransportProps> = ({
                         </div>
                         <div className="text-[11px] text-slate-500 font-semibold">
                           {activeQuote && route.id === selectedRoute.id
-                            ? 'avec votre devis'
+                            ? 'avec votre document'
                             : activeMarketOffer && route.id === selectedRoute.id
                               ? 'estimation marketplace'
                               : 'budget à confirmer'}
@@ -276,7 +290,7 @@ export const StepTransport: React.FC<StepTransportProps> = ({
             <div className="flex-1">
               <h3 className="font-bold text-slate-900">Détails du devis</h3>
               <p className="mt-1 text-xs leading-relaxed text-slate-600">
-                Saisissez-le ici pour remplacer le budget indicatif de fret. Le reste des frais demeure détaillé séparément.
+                Saisissez-le ici pour remplacer le budget indicatif de fret. Le document reste déclaré par vous et n’est pas validé par AutoTransat QC.
               </p>
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
                 <label className="text-xs font-bold text-slate-700">
@@ -324,6 +338,8 @@ export const StepTransport: React.FC<StepTransportProps> = ({
                   Valide jusqu’au
                   <input
                     type="date"
+                    required
+                    min={tomorrow}
                     value={transport.quote?.routeId === selectedRoute.id ? (transport.quote.validUntil ?? '') : ''}
                     onChange={(event) => onChange({ quote: { routeId: selectedRoute.id, ...transport.quote, carrierName: transport.quote?.carrierName ?? '', amountCad: transport.quote?.amountCad ?? 0, quotedAt: transport.quote?.quotedAt ?? new Date().toISOString().slice(0, 10), validUntil: event.target.value || undefined } })}
                     className="mt-1 min-h-[46px] w-full rounded-xl border border-slate-300 bg-white px-3 text-sm"
@@ -337,7 +353,7 @@ export const StepTransport: React.FC<StepTransportProps> = ({
               </label>
               {!activeQuote && (
                 <p className="mt-3 rounded-lg bg-amber-100 px-3 py-2 text-xs font-semibold text-amber-950">
-                  Pour valider le devis, ajoutez le transporteur, le montant, la référence, la date et le document. Un devis expiré est ignoré.
+                  Pour utiliser ce document, ajoutez le transporteur, le montant, la référence, une date de validité future et le fichier. Il restera marqué non vérifié.
                 </p>
               )}
             </div>

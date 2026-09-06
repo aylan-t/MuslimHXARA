@@ -69,12 +69,19 @@ export interface FinancingConfig {
 
 export type TransportMode = 'roro' | 'conteneur_partage' | 'conteneur_complet';
 export type PriceStatus = 'official_tariff' | 'carrier_quote' | 'estimate' | 'quote_required';
-export type FreightOfferStatus = 'marketplace_estimate' | 'partner_rate';
+export type FreightOfferStatus = 'marketplace_estimate' | 'partner_rate' | 'carrier_quote';
+export type FreightOfferProvider =
+  | 'SeaRates'
+  | 'Freightos'
+  | 'Hapag-Lloyd'
+  | 'CMA CGM'
+  | 'Maersk'
+  | (string & {});
 
 export interface FreightMarketOffer {
   id: string;
   routeId: string;
-  provider: 'Freightos' | 'SeaRates';
+  provider: FreightOfferProvider;
   status: FreightOfferStatus;
   amountCad: number;
   lowCad: number;
@@ -85,17 +92,38 @@ export interface FreightMarketOffer {
   estimatedDaysMin?: number;
   estimatedDaysMax?: number;
   retrievedAt: string;
-  sourceUrl: string;
-  attribution: string;
+  sourceUrl?: string;
+  attribution?: string;
+  carrierName?: string;
+  validUntil?: string;
+  inclusions?: string[];
+  exclusions?: string[];
+  /** Backend cost-component mapping (for example: { oceanFreight: 2100 }). */
+  components?: Record<string, unknown>;
+  confidence?: 'high' | 'medium' | 'low' | number | string;
 }
 
 export interface FreightComparisonResult {
   offers: FreightMarketOffer[];
   providerStatuses: Array<{
-    provider: 'Freightos' | 'SeaRates';
-    status: 'available' | 'no_offer' | 'configuration_required' | 'error';
+    provider: FreightOfferProvider;
+    status: 'available' | 'no_offer' | 'error' | 'unavailable';
     message: string;
   }>;
+  coverage?: {
+    targetExternalOffers?: number;
+    externalOfferCount?: number;
+    achieved?: boolean;
+    freshOfferCount?: number;
+    staleOfferCount?: number;
+    lastRefreshedAt?: string;
+    routes?: Array<{
+      routeId: string;
+      externalOffers: number;
+      achieved: boolean;
+    }>;
+  };
+  rfqSuggested?: boolean;
 }
 
 export interface TransportRoute {
@@ -258,7 +286,7 @@ export interface SimulationResult {
     optimistic: FxScenario;
   };
   marketComparison?: MarketComparison;
-  calculationStatus: 'indicative' | 'marketplace_rate' | 'carrier_quote';
+  calculationStatus: 'indicative' | 'marketplace_rate' | 'carrier_quote' | 'user_documented_quote';
   assumptions: string[];
 }
 

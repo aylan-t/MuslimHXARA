@@ -42,10 +42,13 @@ export async function generateSimulationPdf(sim: SimulationResult): Promise<void
   text(`${sim.vehicle.brand} ${sim.vehicle.model} · ${sim.vehicle.year}`, margin, 720, 17, bold);
   text(`${sim.vehicle.mileageKm.toLocaleString('fr-CA')} km · destination ${sim.destination === 'senegal' ? 'Sénégal' : 'Maroc'}`, margin, 701, 10, regular, muted);
 
+  const isDocumentedByUser = sim.calculationStatus === 'user_documented_quote';
   page.drawRectangle({ x: margin, y: 612, width: 507, height: 66, color: sim.calculationStatus === 'carrier_quote' ? rgb(0.9, 0.98, 0.95) : sim.calculationStatus === 'marketplace_rate' ? rgb(0.9, 0.95, 1) : rgb(1, 0.96, 0.84), borderColor: sim.calculationStatus === 'carrier_quote' ? teal : sim.calculationStatus === 'marketplace_rate' ? rgb(0.15, 0.45, 0.75) : amber, borderWidth: 1 });
-  text(sim.calculationStatus === 'carrier_quote' ? 'FRET BASÉ SUR UN DEVIS TRANSPORTEUR' : sim.calculationStatus === 'marketplace_rate' ? 'FRET BASÉ SUR UNE ESTIMATION MARKETPLACE' : 'RÉSULTAT INDICATIF — DEVIS TRANSPORTEUR REQUIS', margin + 14, 654, 10, bold, sim.calculationStatus === 'carrier_quote' ? teal : sim.calculationStatus === 'marketplace_rate' ? rgb(0.1, 0.35, 0.65) : rgb(0.65, 0.38, 0.02));
+  text(sim.calculationStatus === 'carrier_quote' ? 'FRET BASÉ SUR UN DEVIS TRANSPORTEUR VALIDÉ' : isDocumentedByUser ? 'FRET BASÉ SUR UN DOCUMENT FOURNI — NON VÉRIFIÉ' : sim.calculationStatus === 'marketplace_rate' ? 'FRET BASÉ SUR UNE ESTIMATION MARKETPLACE' : 'RÉSULTAT INDICATIF — DEVIS TRANSPORTEUR REQUIS', margin + 14, 654, 10, bold, sim.calculationStatus === 'carrier_quote' ? teal : sim.calculationStatus === 'marketplace_rate' ? rgb(0.1, 0.35, 0.65) : rgb(0.65, 0.38, 0.02));
   text(sim.calculationStatus === 'carrier_quote'
-    ? `Transporteur : ${sim.transport.quote?.carrierName || 'non précisé'} · ${CAD(sim.breakdown.oceanFreightCad)} · devis du ${sim.transport.quote?.quotedAt || 'date non précisée'}`
+    ? `${sim.transport.marketOffer?.provider || 'Transporteur'} · ${CAD(sim.breakdown.oceanFreightCad)} · validité contrôlée`
+    : isDocumentedByUser
+      ? `${sim.transport.quote?.carrierName || 'Transporteur déclaré'} · ${CAD(sim.breakdown.oceanFreightCad)} · authenticité non vérifiée`
     : sim.calculationStatus === 'marketplace_rate'
       ? `${sim.transport.marketOffer?.provider || 'Marketplace'} · ${CAD(sim.breakdown.oceanFreightCad)} · confirmation requise`
     : 'Le fret maritime est une hypothèse de travail et doit être remplacé par un devis officiel.', margin + 14, 632, 9, regular, ink);

@@ -242,6 +242,7 @@ const simWithCarrierQuote = calculateSimulation(
       carrierName: 'Transporteur test',
       reference: 'DEVIS-001',
       quotedAt: '2026-09-01',
+      validUntil: '2099-12-31',
       amountCad: 2750,
       fileName: 'DEVIS-001.pdf',
       fileHash: 'sha256-test',
@@ -252,8 +253,25 @@ const simWithCarrierQuote = calculateSimulation(
   18,
   DEFAULT_CONFIG
 );
-assert(simWithCarrierQuote.calculationStatus === 'carrier_quote', "Un devis transporteur valide change le statut du calcul");
-assert(simWithCarrierQuote.breakdown.oceanFreightCad === 2750, "Le devis transporteur remplace le budget de fret indicatif");
+assert(simWithCarrierQuote.calculationStatus === 'user_documented_quote', "Un devis fourni par l’utilisateur reste identifié comme non vérifié");
+assert(simWithCarrierQuote.breakdown.oceanFreightCad === 2750, "Un devis utilisateur complet et non expiré remplace le budget de fret indicatif");
+
+const simWithSameDayUserQuote = calculateSimulation(
+  DEMO_VEHICLE,
+  'senegal',
+  { method: 'plateforme_transfert', fixedFeeCad: 15, variableFeePercent: 0.7, fxSpreadPercent: 1.2 },
+  {
+    ...simWithCarrierQuote.transport,
+    quote: {
+      ...simWithCarrierQuote.transport.quote!,
+      validUntil: new Date().toISOString().slice(0, 10),
+    },
+  },
+  { country: 'senegal' },
+  18,
+  DEFAULT_CONFIG
+);
+assert(simWithSameDayUserQuote.calculationStatus === 'indicative', "Un document utilisateur expirant aujourd’hui est ignoré");
 
 const simWithIncompleteQuote = calculateSimulation(
   DEMO_VEHICLE,
@@ -306,6 +324,7 @@ const simWithMarketplaceOffer = calculateSimulation(
       originalLow: 4000,
       originalHigh: 4700,
       retrievedAt: '2026-09-05T12:00:00.000Z',
+      validUntil: '2099-12-31T23:59:59.000Z',
       sourceUrl: 'https://ship.freightos.com',
       attribution: 'Estimation marketplace Freightos'
     }
@@ -316,6 +335,25 @@ const simWithMarketplaceOffer = calculateSimulation(
 );
 assert(simWithMarketplaceOffer.calculationStatus === 'marketplace_rate', "Une offre marketplace valide a son propre statut");
 assert(simWithMarketplaceOffer.breakdown.oceanFreightCad === 3000, "L’offre conteneur marketplace est divisée par véhicule");
+
+const simWithExpiredMarketplaceOffer = calculateSimulation(
+  DEMO_VEHICLE,
+  'senegal',
+  { method: 'plateforme_transfert', fixedFeeCad: 15, variableFeePercent: 0.7, fxSpreadPercent: 1.2 },
+  {
+    routeId: 'mtl-dkr-cont40',
+    batchVehiclesCount: 2,
+    marketOffer: {
+      ...simWithMarketplaceOffer.transport.marketOffer!,
+      id: 'freightos-expired',
+      validUntil: '2020-01-01T00:00:00.000Z',
+    },
+  },
+  { country: 'senegal' },
+  18,
+  DEFAULT_CONFIG
+);
+assert(simWithExpiredMarketplaceOffer.calculationStatus === 'indicative', "Une offre marketplace expirée est ignorée");
 
 console.log(`\nBilan des tests : ${passed} réussis, ${failed} échoués.`);
 if (failed > 0) process.exit(1);

@@ -133,7 +133,10 @@ export function calculateSimulation(
   // Si conteneur, le fret est divisé par le nombre de véhicules
   const isContainer = selectedRoute.mode === 'conteneur_complet' || selectedRoute.mode === 'conteneur_partage';
   const batchCount = Math.max(1, transport.batchVehiclesCount || 1);
-  const quoteIsCurrent = !transport.quote?.validUntil || transport.quote.validUntil >= new Date().toISOString().slice(0, 10);
+  const quoteIsCurrent = Boolean(
+    transport.quote?.validUntil
+    && transport.quote.validUntil > new Date().toISOString().slice(0, 10)
+  );
   const validCarrierQuote = transport.quote?.routeId === selectedRoute.id
     && transport.quote.amountCad > 0
     && Boolean(transport.quote.carrierName.trim())
@@ -143,7 +146,13 @@ export function calculateSimulation(
     && quoteIsCurrent
     ? transport.quote
     : undefined;
-  const validMarketOffer = transport.marketOffer?.routeId === selectedRoute.id && transport.marketOffer.amountCad > 0
+  const marketOfferIsCurrent = Boolean(
+    transport.marketOffer?.validUntil
+    && new Date(transport.marketOffer.validUntil).getTime() > Date.now()
+  );
+  const validMarketOffer = transport.marketOffer?.routeId === selectedRoute.id
+    && transport.marketOffer.amountCad > 0
+    && marketOfferIsCurrent
     ? transport.marketOffer
     : undefined;
   const quotedFreightCad = validCarrierQuote?.amountCad ?? validMarketOffer?.amountCad ?? transport.customOceanFreightCad;
@@ -295,12 +304,15 @@ export function calculateSimulation(
     effectiveRate,
     config
   );
-  const hasCarrierQuote = Boolean(validCarrierQuote);
+  const hasUserDocumentedQuote = Boolean(validCarrierQuote);
+  const hasCarrierQuote = validMarketOffer?.status === 'carrier_quote';
   const hasMarketOffer = Boolean(validMarketOffer);
   const assumptions = [
     ...(hasCarrierQuote
-      ? [`Fret basé sur le devis ${validCarrierQuote?.reference || 'fourni'} de ${validCarrierQuote?.carrierName}.`]
-      : hasMarketOffer
+      ? [`Fret basé sur un devis transporteur validé provenant de ${validMarketOffer?.provider}.`]
+      : hasUserDocumentedQuote
+        ? [`Fret basé sur le document ${validCarrierQuote?.reference || 'fourni'} déclaré par l’utilisateur; son authenticité n’est pas vérifiée par AutoTransat QC.`]
+        : hasMarketOffer
         ? [`Fret basé sur une estimation marketplace ${validMarketOffer?.provider} récupérée le ${new Date(validMarketOffer!.retrievedAt).toLocaleDateString('fr-CA')}; confirmation requise.`]
         : ['Fret maritime indicatif : un devis officiel du transporteur est requis avant engagement.']),
     ...(config.fxRates.isLive
@@ -357,7 +369,13 @@ export function calculateSimulation(
     estimatedRoiPercent: Math.round(estimatedRoiPercent * 10) / 10,
     fxScenarios,
     marketComparison: marketMatch,
-    calculationStatus: hasCarrierQuote ? 'carrier_quote' : hasMarketOffer ? 'marketplace_rate' : 'indicative',
+    calculationStatus: hasCarrierQuote
+      ? 'carrier_quote'
+      : hasUserDocumentedQuote
+        ? 'user_documented_quote'
+        : hasMarketOffer
+          ? 'marketplace_rate'
+          : 'indicative',
     assumptions
   };
 }

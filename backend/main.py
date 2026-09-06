@@ -1,9 +1,11 @@
+import os
 import time
 import math
 from typing import Dict, Any
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from backend.schemas import CalculationRequest, CalculationResponse, CostBreakdownResponse
+from backend.freight.routes import router as freight_router
 
 CURRENT_YEAR = 2026
 
@@ -13,13 +15,17 @@ app = FastAPI(
     version="1.0.0"
 )
 
+configured_origins = [origin.strip() for origin in os.getenv("CORS_ALLOWED_ORIGINS", "").split(",")
+                      if origin.strip() and origin.strip() != "*"]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=configured_origins,
+    allow_origin_regex=r"^https://([a-zA-Z0-9-]+\.)*(replit\.dev|repl\.co|replit\.app)$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.include_router(freight_router)
 
 # Configuration de référence en mémoire (modifiable)
 DEFAULT_CONFIG = {
