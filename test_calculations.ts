@@ -242,7 +242,10 @@ const simWithCarrierQuote = calculateSimulation(
       carrierName: 'Transporteur test',
       reference: 'DEVIS-001',
       quotedAt: '2026-09-01',
-      amountCad: 2750
+      amountCad: 2750,
+      fileName: 'DEVIS-001.pdf',
+      fileHash: 'sha256-test',
+      fileMimeType: 'application/pdf'
     }
   },
   { country: 'senegal' },
@@ -283,6 +286,36 @@ const simWithWrongRouteQuote = calculateSimulation(
 );
 assert(simWithWrongRouteQuote.calculationStatus === 'indicative', "Un devis d’une autre route est ignoré");
 assert(simWithWrongRouteQuote.breakdown.oceanFreightCad === 1900, "Le devis d’une autre route ne remplace pas le fret sélectionné");
+
+const simWithMarketplaceOffer = calculateSimulation(
+  DEMO_VEHICLE,
+  'senegal',
+  { method: 'plateforme_transfert', fixedFeeCad: 15, variableFeePercent: 0.7, fxSpreadPercent: 1.2 },
+  {
+    routeId: 'mtl-dkr-cont40',
+    batchVehiclesCount: 2,
+    marketOffer: {
+      id: 'freightos-test',
+      routeId: 'mtl-dkr-cont40',
+      provider: 'Freightos',
+      status: 'marketplace_estimate',
+      amountCad: 6000,
+      lowCad: 5500,
+      highCad: 6500,
+      currency: 'USD',
+      originalLow: 4000,
+      originalHigh: 4700,
+      retrievedAt: '2026-09-05T12:00:00.000Z',
+      sourceUrl: 'https://ship.freightos.com',
+      attribution: 'Estimation marketplace Freightos'
+    }
+  },
+  { country: 'senegal' },
+  18,
+  DEFAULT_CONFIG
+);
+assert(simWithMarketplaceOffer.calculationStatus === 'marketplace_rate', "Une offre marketplace valide a son propre statut");
+assert(simWithMarketplaceOffer.breakdown.oceanFreightCad === 3000, "L’offre conteneur marketplace est divisée par véhicule");
 
 console.log(`\nBilan des tests : ${passed} réussis, ${failed} échoués.`);
 if (failed > 0) process.exit(1);

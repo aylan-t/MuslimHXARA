@@ -4,7 +4,6 @@ import { CostBreakdown } from './CostBreakdown';
 import { FxSensitivity } from './FxSensitivity';
 import { MarketComparison } from './MarketComparison';
 import { LocalMarketLinks } from './LocalMarketLinks';
-import { generateSimulationPdf } from '../../services/pdfExportService';
 import { saveSimulationToHistory } from '../../services/storageService';
 import {
   Download,
@@ -45,6 +44,7 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
   const currencyCode = simulation.breakdown.localCurrencyCode;
   const destName = simulation.destination === 'senegal' ? 'Sénégal (Dakar)' : 'Maroc (Casablanca)';
   const hasCarrierQuote = simulation.calculationStatus === 'carrier_quote';
+  const hasMarketplaceRate = simulation.calculationStatus === 'marketplace_rate';
 
   const handleSave = () => {
     saveSimulationToHistory(simulation);
@@ -55,6 +55,7 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
   const handlePdfExport = async () => {
     setIsExporting(true);
     try {
+      const { generateSimulationPdf } = await import('../../services/pdfExportService');
       await generateSimulationPdf(simulation);
     } catch (e) {
       console.error('Erreur génération PDF:', e);
@@ -106,16 +107,18 @@ export const ResultsDashboard: React.FC<ResultsDashboardProps> = ({
         </div>
       </div>
 
-      <div className={`rounded-xl border px-4 py-3 ${hasCarrierQuote ? 'border-emerald-200 bg-emerald-50' : 'border-amber-300 bg-amber-50'}`}>
+      <div className={`rounded-xl border px-4 py-3 ${hasCarrierQuote ? 'border-emerald-200 bg-emerald-50' : hasMarketplaceRate ? 'border-blue-200 bg-blue-50' : 'border-amber-300 bg-amber-50'}`}>
         <div className="flex items-start gap-3">
           {hasCarrierQuote ? <FileCheck className="mt-0.5 h-5 w-5 text-emerald-700" /> : <AlertTriangle className="mt-0.5 h-5 w-5 text-amber-700" />}
           <div>
             <p className="text-sm font-black text-slate-900">
-              {hasCarrierQuote ? 'Fret calculé avec votre devis transporteur' : 'Résultat indicatif — devis transporteur requis'}
+              {hasCarrierQuote ? 'Fret calculé avec votre devis transporteur' : hasMarketplaceRate ? 'Fret basé sur une estimation marketplace en direct' : 'Résultat indicatif — devis transporteur requis'}
             </p>
             <p className="mt-0.5 text-xs text-slate-600">
               {hasCarrierQuote
                 ? 'Le montant de fret saisi est intégré. Confirmez sa période de validité et les frais inclus.'
+                : hasMarketplaceRate
+                  ? 'L’offre récupérée aide à comparer les routes, mais elle doit être confirmée avant réservation.'
                 : 'Le fret actuel est une hypothèse de travail. Ne prenez pas de décision d’achat avant d’obtenir un devis officiel.'}
             </p>
           </div>

@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { TransportSelection, DestinationCountry, GlobalReferenceConfig, TransportRoute, Vehicle, AdditionalExportCosts } from '../../types';
 import { Tooltip } from '../common/Tooltip';
-import { Truck, Ship, Check, ArrowLeft, Calculator, Clock, Star, ChevronDown, ChevronUp, ShieldCheck, Wrench, FileCheck2 } from 'lucide-react';
+import { Truck, Ship, Check, ArrowLeft, Calculator, Clock, Star, ChevronDown, ChevronUp, ShieldCheck, Wrench, FileCheck2, Upload } from 'lucide-react';
 import { QUEBEC_REGIONS, DEFAULT_CONFIG } from '../../data/defaultData';
+import { FreightComparison } from './FreightComparison';
 
 interface StepTransportProps {
   transport: TransportSelection;
@@ -32,12 +33,22 @@ export const StepTransport: React.FC<StepTransportProps> = ({
   const availableRoutes = routes.filter(r => r.destinationCountry === country);
   const selectedRoute = availableRoutes.find(r => r.id === transport?.routeId) || availableRoutes[0] || routes[0] || DEFAULT_CONFIG.routes[0];
   const isContainer = selectedRoute ? (selectedRoute.mode === 'conteneur_complet' || selectedRoute.mode === 'conteneur_partage') : false;
-  const activeQuote = transport.quote?.routeId === selectedRoute.id && transport.quote.amountCad > 0
+  const quoteIsCurrent = !transport.quote?.validUntil || transport.quote.validUntil >= new Date().toISOString().slice(0, 10);
+  const activeQuote = transport.quote?.routeId === selectedRoute.id
+    && transport.quote.amountCad > 0
+    && Boolean(transport.quote.carrierName.trim())
+    && Boolean(transport.quote.reference?.trim())
+    && Boolean(transport.quote.quotedAt)
+    && Boolean(transport.quote.fileHash && transport.quote.fileName)
+    && quoteIsCurrent
     ? transport.quote
+    : undefined;
+  const activeMarketOffer = transport.marketOffer?.routeId === selectedRoute.id && transport.marketOffer.amountCad > 0
+    ? transport.marketOffer
     : undefined;
 
   const batchCount = Math.max(1, transport?.batchVehiclesCount || 1);
-  const resolvedOceanFreight = activeQuote?.amountCad ?? transport.customOceanFreightCad ?? selectedRoute.oceanFreightCad;
+  const resolvedOceanFreight = activeQuote?.amountCad ?? activeMarketOffer?.amountCad ?? transport.customOceanFreightCad ?? selectedRoute.oceanFreightCad;
   const oceanFreightPerCar = isContainer
     ? Math.round(resolvedOceanFreight / batchCount)
     : resolvedOceanFreight;
@@ -100,12 +111,32 @@ export const StepTransport: React.FC<StepTransportProps> = ({
     const isHal = r.originPort ? r.originPort.toLowerCase().includes('halifax') : false;
     const regInland = isHal ? originRegion.costToHalifaxCad : originRegion.costToMtlCad;
     const routeFreight = r.id === selectedRoute.id
-      ? (activeQuote?.amountCad ?? transport.customOceanFreightCad ?? r.oceanFreightCad)
+      ? (activeQuote?.amountCad ?? activeMarketOffer?.amountCad ?? transport.customOceanFreightCad ?? r.oceanFreightCad)
       : r.oceanFreightCad;
     const freight = isCont ? Math.round(routeFreight / batchCount) : routeFreight;
     const destFees = isCont ? Math.round((r.portDestinationFeesCad || 0) / batchCount) : (r.portDestinationFeesCad || 0);
     const ins = Math.round((purchasePriceCad || 0) * ((r.marineInsuranceRatePercent || 1.5) / 100));
-    return regInland + nonRunningTowing + (r.portOriginFeesCad || 0) + freight + ins + destFees + (r.inlandDestinationCad || 0);
+    return regInland + nonRunningTowing + (r.portOriginFeesCad || 0) + freight + ins + destFees + (r.inlandDestinationCad || 0) + totalAdditionalCosts;
+  };
+
+  const attachQuoteFile = async (file?: File) => {
+    if (!file) return;
+    const allowedTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp'];
+    if (!allowedTypes.includes(file.type) || file.size > 10 * 1024 * 1024) return;
+    const hashBuffer = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+    const fileHash = Array.from(new Uint8Array(hashBuffer)).map((byte) => byte.toString(16).padStart(2, '0')).join('');
+    onChange({
+      quote: {
+        routeId: selectedRoute.id,
+        carrierName: transport.quote?.carrierName ?? '',
+        quotedAt: transport.quote?.quotedAt ?? new Date().toISOString().slice(0, 10),
+        amountCad: transport.quote?.amountCad ?? 0,
+        reference: transport.quote?.reference,
+        fileName: file.name,
+        fileHash,
+        fileMimeType: file.type,
+      },
+    });
   };
 
   return (
@@ -129,6 +160,18 @@ export const StepTransport: React.FC<StepTransportProps> = ({
       </div>
 
       <div className="p-6 sm:p-8 space-y-6">
+        <FreightComparison
+          routes={availableRoutes}
+          selectedRouteId={selectedRoute.id}
+          vehicleCount={batchCount}
+          selectedOffer={activeMarketOffer}
+          onSelectRoute={(routeId) => onChange({
+            routeId,
+            quote: routeId === transport.quote?.routeId ? transport.quote : undefined,
+            marketOffer: routeId === transport.marketOffer?.routeId ? transport.marketOffer : undefined,
+          })}
+          onSelectOffer={(marketOffer) => onChange({ marketOffer, quote: undefined, customOceanFreightCad: undefined })}
+        />
 
         {/* Sélection des routes avec calcul d'impact direct */}
         <div>
@@ -144,7 +187,11 @@ export const StepTransport: React.FC<StepTransportProps> = ({
               return (
                 <div
                   key={route.id}
-                  onClick={() => onChange({ routeId: route.id, quote: route.id === transport.quote?.routeId ? transport.quote : undefined })}
+                  onClick={() => onChange({
+                    routeId: route.id,
+                    quote: route.id === transport.quote?.routeId ? transport.quote : undefined,
+                    marketOffer: route.id === transport.marketOffer?.routeId ? transport.marketOffer : undefined,
+                  })}
                   className={`p-4 sm:p-5 rounded-2xl border-2 cursor-pointer transition-all ${isSelected
                     ? 'border-brand-600 bg-brand-50/50 shadow-md ring-2 ring-brand-500/30'
                     : 'border-slate-200 hover:border-slate-300 bg-white'
@@ -161,8 +208,18 @@ export const StepTransport: React.FC<StepTransportProps> = ({
                             <span>Recommandée</span>
                           </span>
                         )}
-                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${transport.quote?.amountCad && route.id === selectedRoute.id ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-900'}`}>
-                          {activeQuote && route.id === selectedRoute.id ? 'Devis transporteur saisi' : 'Budget indicatif'}
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                          activeQuote && route.id === selectedRoute.id
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : activeMarketOffer && route.id === selectedRoute.id
+                              ? 'bg-blue-100 text-blue-800'
+                              : 'bg-amber-100 text-amber-900'
+                        }`}>
+                          {activeQuote && route.id === selectedRoute.id
+                            ? 'Devis transporteur saisi'
+                            : activeMarketOffer && route.id === selectedRoute.id
+                              ? 'Tarif marketplace'
+                              : 'Budget indicatif'}
                         </span>
                       </div>
 
@@ -187,7 +244,11 @@ export const StepTransport: React.FC<StepTransportProps> = ({
                           {routeTotal.toLocaleString('fr-CA')} $ CA
                         </div>
                         <div className="text-[11px] text-slate-500 font-semibold">
-                          {activeQuote && route.id === selectedRoute.id ? 'avec votre devis officiel' : 'budget à confirmer'}
+                          {activeQuote && route.id === selectedRoute.id
+                            ? 'avec votre devis'
+                            : activeMarketOffer && route.id === selectedRoute.id
+                              ? 'estimation marketplace'
+                              : 'budget à confirmer'}
                         </div>
                       </div>
                       {isSelected && (
@@ -204,11 +265,16 @@ export const StepTransport: React.FC<StepTransportProps> = ({
           </div>
         </div>
 
-        <div className="rounded-2xl border-2 border-emerald-200 bg-emerald-50/60 p-5">
+        <details className="group rounded-2xl border border-slate-200 bg-slate-50">
+          <summary className="flex min-h-[58px] cursor-pointer list-none items-center justify-between px-5 font-bold text-slate-800">
+            Solution de secours : ajouter un devis déjà reçu
+            <ChevronDown className="h-5 w-5 text-slate-500 transition-transform group-open:rotate-180" />
+          </summary>
+          <div className="border-t border-slate-200 p-5">
           <div className="flex items-start gap-3">
             <FileCheck2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-700" />
             <div className="flex-1">
-              <h3 className="font-bold text-slate-900">Avez-vous un devis officiel du transporteur?</h3>
+              <h3 className="font-bold text-slate-900">Détails du devis</h3>
               <p className="mt-1 text-xs leading-relaxed text-slate-600">
                 Saisissez-le ici pour remplacer le budget indicatif de fret. Le reste des frais demeure détaillé séparément.
               </p>
@@ -254,15 +320,30 @@ export const StepTransport: React.FC<StepTransportProps> = ({
                     className="mt-1 min-h-[46px] w-full rounded-xl border border-slate-300 bg-white px-3 text-sm"
                   />
                 </label>
+                <label className="text-xs font-bold text-slate-700">
+                  Valide jusqu’au
+                  <input
+                    type="date"
+                    value={transport.quote?.routeId === selectedRoute.id ? (transport.quote.validUntil ?? '') : ''}
+                    onChange={(event) => onChange({ quote: { routeId: selectedRoute.id, ...transport.quote, carrierName: transport.quote?.carrierName ?? '', amountCad: transport.quote?.amountCad ?? 0, quotedAt: transport.quote?.quotedAt ?? new Date().toISOString().slice(0, 10), validUntil: event.target.value || undefined } })}
+                    className="mt-1 min-h-[46px] w-full rounded-xl border border-slate-300 bg-white px-3 text-sm"
+                  />
+                </label>
               </div>
+              <label className="mt-3 flex min-h-[52px] cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-300 bg-white px-4 text-xs font-bold text-slate-700 hover:border-brand-400 hover:text-brand-800">
+                <Upload className="h-4 w-4" />
+                {transport.quote?.fileName ? `Document lié : ${transport.quote.fileName}` : 'Joindre le devis (PDF ou image, 10 Mo max.)'}
+                <input type="file" accept=".pdf,.png,.jpg,.jpeg,.webp" className="sr-only" onChange={(event) => void attachQuoteFile(event.target.files?.[0])} />
+              </label>
               {!activeQuote && (
                 <p className="mt-3 rounded-lg bg-amber-100 px-3 py-2 text-xs font-semibold text-amber-950">
-                  Aucun devis saisi : le résultat sera clairement marqué comme indicatif.
+                  Pour valider le devis, ajoutez le transporteur, le montant, la référence, la date et le document. Un devis expiré est ignoré.
                 </p>
               )}
             </div>
           </div>
-        </div>
+          </div>
+        </details>
 
         {/* Si conteneur sélectionné : Sélecteur du nombre de voitures */}
         {isContainer && (
@@ -273,7 +354,7 @@ export const StepTransport: React.FC<StepTransportProps> = ({
                   Nombre de véhicules dans ce conteneur (Groupage)
                 </span>
                 <p className="text-xs text-amber-800">
-                  Le coût global du conteneur ({selectedRoute.oceanFreightCad.toLocaleString('fr-CA')} $ CA) est divisé équitablement
+                  Le coût global retenu ({resolvedOceanFreight.toLocaleString('fr-CA')} $ CA) est divisé équitablement
                 </p>
               </div>
               <span className="text-xl font-black text-brand-700 bg-white px-3.5 py-1 rounded-xl border border-amber-300 shadow-sm">

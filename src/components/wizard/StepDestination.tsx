@@ -29,6 +29,10 @@ export const StepDestination: React.FC<StepDestinationProps> = ({
   const vehicleAge = CURRENT_YEAR - vehicle.year;
 
   const isMRE = customs.moroccoOptions?.isMRE ?? false;
+  const invoiceValue = vehicle.purchasePriceCad;
+  const documentedValue = customs.estimatedArgusValueCad;
+  const valuationDifference = documentedValue ? documentedValue - invoiceValue : undefined;
+  const formatCad = (value: number) => `${value.toLocaleString('fr-CA')} $ CA`;
 
   const handleMreToggle = (checked: boolean) => {
     onCustomsChange({
@@ -228,74 +232,102 @@ export const StepDestination: React.FC<StepDestinationProps> = ({
           </div>
         )}
 
-        {/* NOUVEAU : Base de valorisation douanière (Angle mort terrain) */}
-        <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <FileText className="w-5 h-5 text-brand-600" />
-              <label className="text-base font-bold text-slate-900">
-                 Assiette de calcul de la douane
-              </label>
+        {/* Base de valorisation douanière */}
+        <fieldset className="rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:p-5 space-y-4">
+          <legend className="sr-only">Assiette de calcul de la douane</legend>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex items-start gap-2">
+              <FileText className="mt-0.5 h-5 w-5 flex-shrink-0 text-brand-600" />
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Quelle valeur la douane doit-elle regarder ?</h3>
+                <p className="mt-1 text-xs leading-relaxed text-slate-600">
+                  Comparez deux valeurs du véhicule, avant d’ajouter le fret et l’assurance.
+                </p>
+              </div>
               <Tooltip
                 title="Pourquoi ce choix est déterminant ?"
-                 content="La douane peut réévaluer un véhicule acheté sous le prix du marché. N'utilisez une autre assiette que si vous avez un document ou une référence vérifiable; sinon la simulation conserve la facture."
+                content="La douane peut réévaluer un véhicule acheté sous le prix du marché. N'utilisez une autre assiette que si vous avez un document ou une référence vérifiable; sinon la simulation conserve la facture."
               />
             </div>
 
-            {/* Lien officiel de douane */}
             <a
               href={country === 'senegal' ? 'https://www.douanes.sn/' : 'https://www.douane.gov.ma/'}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center space-x-1 text-xs font-bold text-brand-700 hover:text-brand-900 bg-white px-2.5 py-1 rounded-lg border border-slate-300 hover:border-brand-500 shadow-sm transition-colors"
+              className="inline-flex w-fit items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-xs font-bold text-brand-700 shadow-sm transition-colors hover:border-brand-500 hover:text-brand-900"
             >
-              <span>{country === 'senegal' ? 'Douanes du Sénégal (douanes.sn)' : 'Douanes du Maroc (douane.gov.ma)'}</span>
-              <ExternalLink className="w-3 h-3 text-brand-600" />
+              <span>{country === 'senegal' ? 'Douanes du Sénégal' : 'Douanes du Maroc'}</span>
+              <ExternalLink className="h-3 w-3 text-brand-600" />
+              <span className="sr-only">(ouvre un nouvel onglet)</span>
             </a>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2" role="radiogroup" aria-label="Base de valorisation">
             <label
-              className={`p-3.5 rounded-xl border-2 cursor-pointer transition-all ${(customs.valuationBasis || 'invoice') === 'invoice'
-                  ? 'border-brand-600 bg-brand-50/50 shadow-sm'
-                  : 'border-slate-200 bg-white hover:border-slate-300'
-                }`}
+              className={`relative cursor-pointer rounded-xl border-2 bg-white p-4 transition-all focus-within:ring-2 focus-within:ring-brand-500 focus-within:ring-offset-2 ${
+                (customs.valuationBasis || 'invoice') === 'invoice'
+                  ? 'border-brand-600 bg-brand-50/60 shadow-md'
+                  : 'border-slate-200 hover:border-slate-300'
+              }`}
             >
               <input
                 type="radio"
                 name="valuationBasis"
+                value="invoice"
                 checked={(customs.valuationBasis || 'invoice') === 'invoice'}
                 onChange={() => onCustomsChange({ valuationBasis: 'invoice' })}
                 className="sr-only"
               />
-              <div className="font-bold text-sm text-slate-900">1. Prix d'achat facturé ({vehicle.purchasePriceCad.toLocaleString('fr-CA')} $ CAD)</div>
-              <div className="text-xs text-slate-500 mt-1">
-                Idéal si acheté chez un concessionnaire ou particulier au prix normal du marché.
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-[11px] font-black uppercase tracking-wider text-slate-500">Option 1</div>
+                  <div className="mt-1 text-sm font-bold text-slate-900">Prix d’achat facturé</div>
+                </div>
+                {(customs.valuationBasis || 'invoice') === 'invoice' && <CheckCircle className="h-5 w-5 flex-shrink-0 text-brand-700" aria-label="Option sélectionnée" />}
               </div>
+              <div className="mt-3 text-xl font-black tracking-tight text-brand-900">{formatCad(invoiceValue)}</div>
+              <div className="mt-1 text-xs leading-relaxed text-slate-600">Valeur du véhicule sur votre facture, avant fret et assurance.</div>
             </label>
 
             <label
-              className={`p-3.5 rounded-xl border-2 cursor-pointer transition-all ${customs.valuationBasis === 'argus_official'
-                  ? 'border-brand-600 bg-brand-50/50 shadow-sm'
-                  : 'border-slate-200 bg-white hover:border-slate-300'
-                }`}
+              className={`relative cursor-pointer rounded-xl border-2 bg-white p-4 transition-all focus-within:ring-2 focus-within:ring-brand-500 focus-within:ring-offset-2 ${
+                customs.valuationBasis === 'argus_official'
+                  ? 'border-brand-600 bg-brand-50/60 shadow-md'
+                  : 'border-slate-200 hover:border-slate-300'
+              }`}
             >
               <input
                 type="radio"
                 name="valuationBasis"
+                value="argus_official"
                 checked={customs.valuationBasis === 'argus_official'}
                 onChange={() => onCustomsChange({ valuationBasis: 'argus_official' })}
                 className="sr-only"
               />
-              <div className="font-bold text-sm text-brand-900 flex items-center justify-between">
-                <span>2. Valeur douanière documentée</span>
-                <span className="text-[10px] bg-amber-200 text-amber-900 px-1.5 py-0.5 rounded font-black">Document requis</span>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-[11px] font-black uppercase tracking-wider text-slate-500">Option 2</div>
+                  <div className="mt-1 text-sm font-bold text-slate-900">Valeur douanière documentée</div>
+                </div>
+                {customs.valuationBasis === 'argus_official' && <CheckCircle className="h-5 w-5 flex-shrink-0 text-brand-700" aria-label="Option sélectionnée" />}
               </div>
-              <div className="text-xs text-slate-600 mt-1">
-                Utilisez uniquement une valeur reçue d’une source douanière ou professionnelle identifiable.
+              <div className="mt-3 text-xl font-black tracking-tight text-brand-900">
+                {documentedValue ? formatCad(documentedValue) : 'À documenter'}
               </div>
+              <div className="mt-1 text-xs leading-relaxed text-slate-600">Valeur du véhicule avant fret et assurance, appuyée par une source vérifiable.</div>
+              <span className="mt-3 inline-flex rounded-md bg-amber-100 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-amber-900">Document requis</span>
             </label>
           </div>
+
+          {documentedValue && (
+            <div className="flex flex-col gap-1 rounded-xl border border-brand-200 bg-white px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+              <span className="font-semibold text-slate-700">Écart entre les deux valeurs</span>
+              <span className={`font-black ${valuationDifference && valuationDifference > 0 ? 'text-amber-800' : 'text-emerald-700'}`}>
+                {valuationDifference && valuationDifference > 0 ? '+' : ''}{formatCad(valuationDifference ?? 0)}
+              </span>
+            </div>
+          )}
+
           {customs.valuationBasis === 'argus_official' && (
             <div className="grid gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 sm:grid-cols-2">
               <label className="text-xs font-bold text-slate-700">
@@ -311,7 +343,7 @@ export const StepDestination: React.FC<StepDestinationProps> = ({
               )}
             </div>
           )}
-        </div>
+        </fieldset>
 
       </div>
 

@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { SimulationResult } from '../../types';
 import { loadSavedSimulations, deleteSimulationFromHistory } from '../../services/storageService';
 import { History, Trash2, Eye, GitCompare, ArrowRight, CheckCircle2, Plus } from 'lucide-react';
-import { generateSimulationPdf } from '../../services/pdfExportService';
 
 interface SimulationHistoryProps {
   onSelectSimulation: (sim: SimulationResult) => void;
@@ -226,7 +225,7 @@ export const SimulationHistory: React.FC<SimulationHistoryProps> = ({
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        generateSimulationPdf(sim);
+                        void import('../../services/pdfExportService').then(({ generateSimulationPdf }) => generateSimulationPdf(sim));
                       }}
                       className="p-2 text-slate-500 hover:text-brand-600 hover:bg-slate-100 rounded-lg transition-colors"
                       title="Télécharger le PDF"

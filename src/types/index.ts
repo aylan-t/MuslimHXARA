@@ -69,6 +69,34 @@ export interface FinancingConfig {
 
 export type TransportMode = 'roro' | 'conteneur_partage' | 'conteneur_complet';
 export type PriceStatus = 'official_tariff' | 'carrier_quote' | 'estimate' | 'quote_required';
+export type FreightOfferStatus = 'marketplace_estimate' | 'partner_rate';
+
+export interface FreightMarketOffer {
+  id: string;
+  routeId: string;
+  provider: 'Freightos' | 'SeaRates';
+  status: FreightOfferStatus;
+  amountCad: number;
+  lowCad: number;
+  highCad: number;
+  currency: string;
+  originalLow: number;
+  originalHigh: number;
+  estimatedDaysMin?: number;
+  estimatedDaysMax?: number;
+  retrievedAt: string;
+  sourceUrl: string;
+  attribution: string;
+}
+
+export interface FreightComparisonResult {
+  offers: FreightMarketOffer[];
+  providerStatuses: Array<{
+    provider: 'Freightos' | 'SeaRates';
+    status: 'available' | 'no_offer' | 'configuration_required' | 'error';
+    message: string;
+  }>;
+}
 
 export interface TransportRoute {
   id: string;
@@ -101,6 +129,7 @@ export interface TransportSelection {
   customInlandOriginCad?: number;
   customOceanFreightCad?: number;
   customInlandDestinationCad?: number;
+  marketOffer?: FreightMarketOffer;
   additionalCosts?: AdditionalExportCosts;
   quote?: {
     routeId: string;
@@ -109,6 +138,9 @@ export interface TransportSelection {
     quotedAt: string;
     validUntil?: string;
     amountCad: number;
+    fileName?: string;
+    fileHash?: string;
+    fileMimeType?: string;
   };
 }
 
@@ -226,7 +258,7 @@ export interface SimulationResult {
     optimistic: FxScenario;
   };
   marketComparison?: MarketComparison;
-  calculationStatus: 'indicative' | 'carrier_quote';
+  calculationStatus: 'indicative' | 'marketplace_rate' | 'carrier_quote';
   assumptions: string[];
 }
 

@@ -115,7 +115,11 @@ export function calculateSimulation(
   const bankTransferCostCad = financing.fixedFeeCad + (vehicle.purchasePriceCad * (financing.variableFeePercent / 100));
 
   // 3. Transport terrestre d'origine précis selon la région québécoise choisie
-  const selectedRoute = config.routes.find(r => r.id === transport.routeId) || config.routes[0];
+  const countryRoutes = config.routes.filter((route) => route.destinationCountry === country);
+  const selectedRoute = countryRoutes.find((route) => route.id === transport.routeId) || countryRoutes[0];
+  if (!selectedRoute) {
+    throw new Error(`Aucune route de transport n'est configurée pour la destination ${country}.`);
+  }
   const isHalifax = selectedRoute?.originPort ? selectedRoute.originPort.toLowerCase().includes('halifax') : false;
 
   const regions = (config.quebecRegions && config.quebecRegions.length > 0) ? config.quebecRegions : QUEBEC_REGIONS;
@@ -129,10 +133,20 @@ export function calculateSimulation(
   // Si conteneur, le fret est divisé par le nombre de véhicules
   const isContainer = selectedRoute.mode === 'conteneur_complet' || selectedRoute.mode === 'conteneur_partage';
   const batchCount = Math.max(1, transport.batchVehiclesCount || 1);
-  const validCarrierQuote = transport.quote?.routeId === selectedRoute.id && transport.quote.amountCad > 0
+  const quoteIsCurrent = !transport.quote?.validUntil || transport.quote.validUntil >= new Date().toISOString().slice(0, 10);
+  const validCarrierQuote = transport.quote?.routeId === selectedRoute.id
+    && transport.quote.amountCad > 0
+    && Boolean(transport.quote.carrierName.trim())
+    && Boolean(transport.quote.reference?.trim())
+    && Boolean(transport.quote.quotedAt)
+    && Boolean(transport.quote.fileHash && transport.quote.fileName)
+    && quoteIsCurrent
     ? transport.quote
     : undefined;
-  const quotedFreightCad = validCarrierQuote?.amountCad ?? transport.customOceanFreightCad;
+  const validMarketOffer = transport.marketOffer?.routeId === selectedRoute.id && transport.marketOffer.amountCad > 0
+    ? transport.marketOffer
+    : undefined;
+  const quotedFreightCad = validCarrierQuote?.amountCad ?? validMarketOffer?.amountCad ?? transport.customOceanFreightCad;
   const oceanFreightCad = isContainer
     ? (quotedFreightCad ?? selectedRoute.oceanFreightCad) / batchCount
     : (quotedFreightCad ?? selectedRoute.oceanFreightCad);
@@ -282,10 +296,13 @@ export function calculateSimulation(
     config
   );
   const hasCarrierQuote = Boolean(validCarrierQuote);
+  const hasMarketOffer = Boolean(validMarketOffer);
   const assumptions = [
     ...(hasCarrierQuote
       ? [`Fret basé sur le devis ${validCarrierQuote?.reference || 'fourni'} de ${validCarrierQuote?.carrierName}.`]
-      : ['Fret maritime indicatif : un devis officiel du transporteur est requis avant engagement.']),
+      : hasMarketOffer
+        ? [`Fret basé sur une estimation marketplace ${validMarketOffer?.provider} récupérée le ${new Date(validMarketOffer!.retrievedAt).toLocaleDateString('fr-CA')}; confirmation requise.`]
+        : ['Fret maritime indicatif : un devis officiel du transporteur est requis avant engagement.']),
     ...(config.fxRates.isLive
       ? ['Taux de change de marché indicatif, distinct du taux réellement offert par votre institution financière.']
       : ['Taux de change local de repli : actualisation recommandée.']),
@@ -340,7 +357,7 @@ export function calculateSimulation(
     estimatedRoiPercent: Math.round(estimatedRoiPercent * 10) / 10,
     fxScenarios,
     marketComparison: marketMatch,
-    calculationStatus: hasCarrierQuote ? 'carrier_quote' : 'indicative',
+    calculationStatus: hasCarrierQuote ? 'carrier_quote' : hasMarketOffer ? 'marketplace_rate' : 'indicative',
     assumptions
   };
 }
