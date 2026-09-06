@@ -6,6 +6,29 @@ from .providers import active_adapters
 from .repository import FreightRepository, utc_now
 
 TARGET_EXTERNAL_OFFERS = 2
+PUBLIC_RFQ_CHANNELS = [
+    {
+        "provider": "Wallenius Wilhelmsen",
+        "modes": ["roro"],
+        "url": "https://www.walleniuswilhelmsen.com/rate-request",
+        "channelType": "official_carrier_form",
+        "label": "Demander un tarif au transporteur",
+    },
+    {
+        "provider": "IMS Shipping",
+        "modes": ["roro", "conteneur_complet", "conteneur_partage"],
+        "url": "https://www.ims-shipping.com/contact",
+        "channelType": "freight_forwarder_form",
+        "label": "Demander un devis Afrique",
+    },
+    {
+        "provider": "Globy",
+        "modes": ["conteneur_complet", "conteneur_partage"],
+        "url": "https://globy.com/freight-calculator",
+        "channelType": "public_marketplace",
+        "label": "Rechercher un tarif conteneur",
+    },
+]
 KNOWN_ROUTE_MATRIX = [
     {"id": "mtl-dkr-roro", "originPort": "Port de Montréal (QC)", "destinationPort": "Port Autonome de Dakar", "mode": "roro"},
     {"id": "hal-dkr-roro", "originPort": "Port d'Halifax (NS)", "destinationPort": "Port Autonome de Dakar", "mode": "roro"},
@@ -114,9 +137,16 @@ class FreightService:
 
     def create_rfq(self, payload):
         identifier = "rfq_" + uuid4().hex
+        mode = payload.get("route", {}).get("mode")
+        channels = [
+            {key: value for key, value in channel.items() if key != "modes"}
+            for channel in PUBLIC_RFQ_CHANNELS
+            if mode in channel["modes"]
+        ]
         rfq = {"id": identifier, "reference": "ATQC-" + identifier[-8:].upper(),
                "createdAt": utc_now(), "status": "pending", "emailSent": False,
-               "message": "Demande enregistrée; aucune transmission externe n’a encore été effectuée.", **payload}
+               "message": "Demande enregistrée; ouvrez un canal officiel ci-dessous pour la transmettre.",
+               "channels": channels, **payload}
         self.repository.save_rfq(rfq)
         return rfq
 

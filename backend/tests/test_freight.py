@@ -75,6 +75,10 @@ class FreightTests(unittest.TestCase):
         self.assertEqual(service.repository.get_rfq(rfq["id"])["id"], rfq["id"])
         self.assertFalse(rfq["emailSent"])
         self.assertTrue(rfq["reference"])
+        self.assertEqual(
+            {channel["provider"] for channel in rfq["channels"]},
+            {"Wallenius Wilhelmsen", "IMS Shipping"},
+        )
 
 
 class FakeResponse:

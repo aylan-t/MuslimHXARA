@@ -26,6 +26,12 @@ interface RfqResponse {
   status?: string;
   emailSent?: boolean;
   message?: string;
+  channels?: Array<{
+    provider: string;
+    url: string;
+    channelType: string;
+    label: string;
+  }>;
 }
 
 const formatDate = (value?: string) => value
@@ -197,7 +203,34 @@ export const FreightComparison: React.FC<FreightComparisonProps> = ({
               <p className="mt-1 text-xs leading-relaxed text-amber-900">Préremplie pour {selectedRoute.originPort} → {selectedRoute.destinationPort}, {vehicleCount} véhicule{vehicleCount > 1 ? 's' : ''}, {vehicle.year} {vehicle.brand} {vehicle.model}. Les budgets internes affichés ci-dessous restent distincts.</p>
               {!rfq && <label className="mt-3 block text-xs font-bold text-amber-950">Précisions pour le devis (facultatif)<textarea value={rfqNotes} onChange={(event) => setRfqNotes(event.target.value)} className="mt-1 min-h-[70px] w-full rounded-lg border border-amber-300 bg-white p-2 text-sm font-normal text-slate-800" placeholder="Contraintes de départ, disponibilité, etc." /></label>}
               {rfqError && <p className="mt-3 text-xs font-bold text-red-800" role="alert">{rfqError}</p>}
-              {rfq ? <p className="mt-3 rounded-lg bg-white p-3 text-xs font-semibold text-emerald-900">Demande créée{rfq.reference || rfq.id ? ` — référence ${rfq.reference ?? rfq.id}` : ''}{rfq.status ? ` (${rfq.status})` : ''}.{rfq.emailSent ? ' L’API confirme l’envoi par courriel.' : ''}{rfq.message ? ` ${rfq.message}` : ''}</p> : <button type="submit" disabled={rfqLoading} className="mt-3 inline-flex min-h-[42px] items-center gap-2 rounded-xl bg-amber-700 px-4 text-xs font-black text-white hover:bg-amber-800 disabled:opacity-60">{rfqLoading && <Loader2 className="h-4 w-4 animate-spin" />}Créer la demande de devis</button>}
+              {rfq ? (
+                <div className="mt-3 rounded-lg bg-white p-3">
+                  <p className="text-xs font-semibold text-emerald-900">
+                    Demande créée{rfq.reference || rfq.id ? ` — référence ${rfq.reference ?? rfq.id}` : ''}{rfq.status ? ` (${rfq.status})` : ''}.
+                    {rfq.emailSent ? ' L’API confirme l’envoi par courriel.' : ''}
+                    {rfq.message ? ` ${rfq.message}` : ''}
+                  </p>
+                  {(rfq.channels?.length ?? 0) > 0 && (
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                      {rfq.channels?.map((channel) => (
+                        <a
+                          key={`${channel.provider}-${channel.url}`}
+                          href={channel.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex min-h-[42px] items-center justify-between gap-2 rounded-xl border border-amber-300 bg-amber-50 px-3 text-xs font-black text-amber-950 hover:bg-amber-100"
+                        >
+                          <span>{channel.provider} · {channel.label}</span>
+                          <ExternalLink className="h-4 w-4 shrink-0" />
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                  {!rfq.emailSent && (
+                    <p className="mt-2 text-[11px] text-slate-600">La transmission n’est pas automatique : utilisez un des liens officiels et conservez la référence AutoTransat dans votre demande.</p>
+                  )}
+                </div>
+              ) : <button type="submit" disabled={rfqLoading} className="mt-3 inline-flex min-h-[42px] items-center gap-2 rounded-xl bg-amber-700 px-4 text-xs font-black text-white hover:bg-amber-800 disabled:opacity-60">{rfqLoading && <Loader2 className="h-4 w-4 animate-spin" />}Créer la demande de devis</button>}
             </div>
           </div>
         </form>
