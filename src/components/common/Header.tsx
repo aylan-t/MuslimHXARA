@@ -54,8 +54,8 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, onNewSi
           </nav>
            <div className={`rounded-xl bg-white/10 p-3 text-xs text-slate-300 ${collapsed ? 'hidden' : ''}`}>
              <div className="flex items-center justify-between font-semibold text-white">
-               <span>Taux API indicatifs</span>
-               <button onClick={onRefreshLiveRates} disabled={isRefreshingRates} aria-label="Actualiser les taux">
+                <span>Taux de change en direct</span>
+                <button onClick={onRefreshLiveRates} disabled={isRefreshingRates} aria-label="Actualiser les taux en direct" title="Récupérer les derniers taux publiés">
                  <RefreshCw className={`h-4 w-4 ${isRefreshingRates ? 'animate-spin' : ''}`} />
                </button>
              </div>

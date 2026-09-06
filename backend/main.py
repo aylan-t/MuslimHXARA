@@ -73,7 +73,7 @@ FX_CACHE_TTL_SECONDS = 15 * 60
 _fx_cache: Dict[str, Any] = {"payload": None, "expiresAt": 0.0}
 
 app = FastAPI(
-    title="AutoTransat QC API",
+    title="QCar export API",
     description="API de calcul de rentabilité pour l'exportation de véhicules Québec -> Maroc & Sénégal",
     version="1.0.0"
 )
@@ -148,7 +148,7 @@ DEFAULT_CONFIG = {
 @app.get("/")
 def read_root():
     return {
-        "app": "AutoTransat QC API",
+        "app": "QCar export API",
         "status": "online",
         "version": "1.0.0",
         "docs": "/docs"
