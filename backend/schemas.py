@@ -1,4 +1,4 @@
-from typing import Optional, List, Literal
+from typing import Optional, List, Literal, Dict, Any
 from pydantic import BaseModel, Field
 
 DestinationCountry = Literal['senegal', 'maroc']
@@ -94,3 +94,22 @@ class CalculationResponse(BaseModel):
     estimatedNetProfitCad: float
     estimatedNetProfitLocal: float
     estimatedRoiPercent: float
+
+
+class VoiceKnownState(BaseModel):
+    confirmed: List[str] = []
+
+
+class VoiceParseResponse(BaseModel):
+    updates: Dict[str, Any] = {}
+    confidence: float = 0.0
+    transcript: str = ""
+    missing_for_current_step: List[str] = []
+    next_prompt: str = ""
+    future_hits: List[str] = []
+
+
+class VoiceSpeakRequest(BaseModel):
+    text: str
+    voice: str = "Kore"
+    pace: str = "slow"

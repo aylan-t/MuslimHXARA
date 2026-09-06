@@ -77,6 +77,43 @@ Documentation interactive Swagger disponible sur [http://localhost:8000/docs](ht
 Le moteur de calcul et les règles légales sont validés par la suite de tests :
 
 ```bash
-node test_calculations.mjs
+npm test
 ```
+
+## Extension Chrome v1.3.1
+
+```bash
+cd marketplace-extension
+npm install
+npm run sync:extension-engine
+npm test
+npm run typecheck
+npm run build
+```
+
+Chargez ensuite `marketplace-extension/dist-extension/` depuis
+`chrome://extensions` en mode développeur. L'application cible par défaut
+`http://localhost:3000` et accepte le préremplissage sécurisé `?prefill=`.
+
+## Voice assistant (ai-audio-mode)
+
+One-time setup (installs npm + Python deps):
+
+```bash
+npm run setup
+```
+
+Then a single command starts both servers (web :3000 + API :8000):
+
+```bash
+npm run dev
+```
+
+(`dev:web` / `dev:api` run each server alone. Replit uses `dev:web`.)
+
+.env setup: copy `.env.example` → `.env` and fill `GEMINI_API_KEY` (get a key at https://aistudio.google.com/apikey). Never commit `.env` — it is covered by `.gitignore`; only `.env.example` is committed.
+
+Demo hosting note: the backend must run alongside the frontend — use a second Replit workflow or a separate host for the API.
+
+Frontend: point the voice service at the backend with `VITE_API_BASE_URL` (default `http://localhost:8000`).
 

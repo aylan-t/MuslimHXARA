@@ -2,14 +2,53 @@ import os
 import time
 import json
 import math
+import base64
+import logging
+import urllib.request
+import urllib.error
 from datetime import datetime, timezone
 from typing import Dict, Any
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, File, Form, UploadFile
+from fastapi.responses import JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
-from backend.schemas import CalculationRequest, CalculationResponse, CostBreakdownResponse
+from dotenv import load_dotenv
+from backend.schemas import CalculationRequest, CalculationResponse, CostBreakdownResponse, VoiceParseResponse, VoiceSpeakRequest
 from backend.freight.routes import router as freight_router
+load_dotenv()  # populate os.environ from repo-root .env (uvicorn/concurrently do not do this)
+
+voice_log = logging.getLogger("voice")
+voice_log.info(
+    "voice: GEMINI_API_KEY %s (set it in .env, then restart the server)",
+    "configured" if os.environ.get("GEMINI_API_KEY", "").strip() else "MISSING",
+)
+
+
+def _resolve_gemini_auth():
+    """Return (extra_headers, mode) for Gemini calls.
+
+    Prefers a legacy AIza API key; falls back to gcloud ADC OAuth, which
+    covers accounts that can only mint new AQ. keys (rejected as ?key=).
+    Raises RuntimeError with a human-readable cause when neither works.
+    """
+    key = os.environ.get("GEMINI_API_KEY", "").strip()
+    if key.startswith("AIza"):
+        return ({"x-goog-api-key": key}, "api-key")
+    try:
+        import google.auth
+        from google.auth.transport import requests as google_requests
+    except ImportError:
+        raise RuntimeError("no AIza key and google-auth is missing (run: pip install -r backend/requirements.txt)")
+    try:
+        creds, _ = google.auth.default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
+        creds.refresh(google_requests.Request())
+    except Exception as e:
+        raise RuntimeError(
+            "no usable auth: set a legacy AIza GEMINI_API_KEY in .env or run "
+            "'gcloud auth application-default login' (%s)" % type(e).__name__
+        )
+    return ({"Authorization": "Bearer " + creds.token}, "oauth-adc")
 
 CURRENT_YEAR = 2026
 FX_API_URL = "https://open.er-api.com/v6/latest/CAD"
@@ -304,3 +343,214 @@ def calculate_landed_cost(req: CalculationRequest):
         estimatedNetProfitLocal=round(net_profit_local),
         estimatedRoiPercent=round(roi_percent, 1)
     )
+
+
+VOICE_CATALOG_BRANDS = [
+    "Acura", "Audi", "BMW", "Chevrolet", "Ford", "Honda", "Hyundai",
+    "Jeep", "Kia", "Lexus", "Mazda", "Mercedes-Benz", "Mitsubishi",
+    "Nissan", "Subaru", "Tesla", "Toyota", "Volkswagen", "Volvo",
+]
+VOICE_MAX_AUDIO_BYTES = 2 * 1024 * 1024
+VOICE_GEMINI_TIMEOUT_S = 25
+
+
+def _call_gemini_audio_parse(auth_headers, audio_bytes: bytes, mime_type: str, current_step: int, known_json: str) -> Dict[str, Any]:
+    catalog_str = ", ".join(VOICE_CATALOG_BRANDS)
+    system_prompt = (
+        "You are a form filler for Quebec car export. English only. "
+        f"Step-1 fields: brand, model, year int 2000-{CURRENT_YEAR}, purchasePriceCad int, mileageKm int, category enum. "
+        "Also detect future: destination senegal|maroc + transport hints. "
+        "Numbers-words to ints. Last value wins per field. "
+        f"Brand normalization: map the heard brand to the closest entry of the catalog [{catalog_str}]; "
+        "if no close match return raw string with confidence<=0.5 and do NOT invent a model. "
+        "Never return a model without a matched brand. "
+        "known_json contains confirmed[]. Fields at defaults and absent from confirmed MUST be listed "
+        "in missing_for_current_step as confirm prompts. "
+        "Return ONLY JSON {updates, confidence 0-1, transcript, missing_for_current_step, next_prompt, future_hits}."
+    )
+    audio_b64 = base64.b64encode(audio_bytes).decode("ascii")
+    payload = {
+        "system_instruction": {"parts": [{"text": system_prompt}]},
+        "contents": [
+            {
+                "parts": [
+                    {"text": f"current_step={current_step} known_json={known_json}"},
+                    {"inlineData": {"mimeType": mime_type, "data": audio_b64}},
+                ]
+            }
+        ],
+        "generationConfig": {"temperature": 0.2, "responseMimeType": "application/json"},
+    }
+    # Auth: x-goog-api-key header (legacy AIza keys) or Bearer token (gcloud
+    # ADC OAuth, covers accounts stuck with AQ. keys). Key/token never logged.
+    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
+    body = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        url, data=body,
+        headers={"Content-Type": "application/json", **auth_headers},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=VOICE_GEMINI_TIMEOUT_S) as resp:
+            raw_body = resp.read().decode("utf-8", errors="replace")
+    except urllib.error.HTTPError as e:
+        raise RuntimeError(f"Gemini HTTP {e.code}")
+    except urllib.error.URLError as e:
+        raise RuntimeError(f"Gemini network error: {type(e).__name__}")
+    except Exception as e:
+        if type(e).__name__ == "TimeoutError" or "timed out" in str(e).lower():
+            raise RuntimeError("Gemini timeout")
+        raise RuntimeError(f"Gemini request failed: {type(e).__name__}")
+    try:
+        outer = json.loads(raw_body)
+        text = outer["candidates"][0]["content"]["parts"][0]["text"]
+    except Exception:
+        raise RuntimeError("Gemini bad response shape")
+    text = text.strip()
+    if text.startswith("```"):
+        lines = text.splitlines()
+        if lines and lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].strip().startswith("```"):
+            lines = lines[:-1]
+        text = "\n".join(lines).strip()
+    try:
+        return json.loads(text)
+    except Exception:
+        raise RuntimeError("Gemini non-JSON reply")
+
+
+@app.post("/api/voice/parse-audio", response_model=VoiceParseResponse)
+async def voice_parse_audio(
+    audio: UploadFile = File(...),
+    current_step: int = Form(default=1),
+    known_json: str = Form(default="{}"),
+):
+    try:
+        auth_headers, auth_mode = _resolve_gemini_auth()
+    except RuntimeError as e:
+        voice_log.warning("parse-audio 503: %s", str(e)[:160])
+        return JSONResponse(status_code=503, content={"error": str(e)[:200], "retryable": False})
+    data = await audio.read()
+    if len(data) == 0:
+        voice_log.warning("parse-audio 400: received empty audio chunk")
+        return JSONResponse(status_code=400, content={"error": "empty audio", "retryable": False})
+    if len(data) > VOICE_MAX_AUDIO_BYTES:
+        voice_log.warning("parse-audio 413: audio chunk too large (%d bytes, max %d)", len(data), VOICE_MAX_AUDIO_BYTES)
+        return JSONResponse(status_code=413, content={"error": "audio too large (max ~2MB)", "retryable": False})
+    mime_type = audio.content_type or "audio/webm"
+    try:
+        parsed = _call_gemini_audio_parse(auth_headers, data, mime_type, current_step, known_json)
+    except RuntimeError as e:
+        voice_log.warning("parse-audio 502: Gemini call failed (%s) - chunk %d bytes, step %d", str(e)[:120], len(data), current_step)
+        return JSONResponse(status_code=502, content={"error": str(e)[:160], "retryable": True})
+    except Exception:
+        voice_log.warning("parse-audio 502: unexpected failure before validation - chunk %d bytes", len(data))
+        return JSONResponse(status_code=502, content={"error": "voice parse failed", "retryable": True})
+    try:
+        if not isinstance(parsed, dict):
+            raise ValueError("invalid shape")
+        updates = parsed.get("updates", {})
+        if not isinstance(updates, dict):
+            raise ValueError("invalid updates shape")
+        try:
+            confidence = float(parsed.get("confidence", 0.0))
+        except (TypeError, ValueError):
+            raise ValueError("invalid confidence shape")
+        if not math.isfinite(confidence):
+            confidence = 0.0
+        confidence = max(0.0, min(1.0, confidence))
+        transcript = parsed.get("transcript", "")
+        if not isinstance(transcript, str):
+            transcript = str(transcript)
+        missing = parsed.get("missing_for_current_step", [])
+        if not isinstance(missing, list):
+            raise ValueError("invalid missing shape")
+        missing = [str(x) for x in missing]
+        next_prompt = parsed.get("next_prompt", "")
+        if not isinstance(next_prompt, str):
+            next_prompt = str(next_prompt)
+        future_hits = parsed.get("future_hits", [])
+        if not isinstance(future_hits, list):
+            raise ValueError("invalid future_hits shape")
+        future_hits = [str(x) for x in future_hits]
+    except ValueError as e:
+        voice_log.warning("parse-audio 502: Gemini reply failed validation (%s)", str(e)[:120])
+        return JSONResponse(status_code=502, content={"error": str(e)[:160], "retryable": True})
+    voice_log.info(
+        "parse-audio 200: conf=%.2f updated=[%s] missing=%d transcript=%.120s",
+        confidence, ",".join(sorted(updates.keys())), len(missing), transcript,
+    )
+    return VoiceParseResponse(
+        updates=updates,
+        confidence=confidence,
+        transcript=transcript,
+        missing_for_current_step=missing,
+        next_prompt=next_prompt,
+        future_hits=future_hits,
+    )
+
+
+def _call_gemini_tts(auth_headers, text: str, voice: str) -> bytes:
+    payload = {
+        "contents": [{"parts": [{"text": text}]}],
+        "generationConfig": {
+            "responseModalities": ["AUDIO"],
+            "speechConfig": {"voiceConfig": {"prebuiltVoiceConfig": {"voiceName": voice or "Kore"}}},
+        },
+    }
+    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-tts:generateContent"
+    body = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        url, data=body,
+        headers={"Content-Type": "application/json", **auth_headers},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=VOICE_GEMINI_TIMEOUT_S) as resp:
+            raw_body = resp.read().decode("utf-8", errors="replace")
+    except urllib.error.HTTPError as e:
+        raise RuntimeError(f"Gemini HTTP {e.code}")
+    except urllib.error.URLError:
+        raise RuntimeError("Gemini network error")
+    except Exception as e:
+        if type(e).__name__ == "TimeoutError" or "timed out" in str(e).lower():
+            raise RuntimeError("Gemini timeout")
+        raise RuntimeError(f"Gemini request failed: {type(e).__name__}")
+    try:
+        outer = json.loads(raw_body)
+        parts = outer["candidates"][0]["content"]["parts"]
+        audio_b64 = next(
+            p["inlineData"]["data"]
+            for p in parts
+            if isinstance(p, dict) and isinstance(p.get("inlineData"), dict) and p["inlineData"].get("data")
+        )
+    except Exception:
+        raise RuntimeError("Gemini bad response shape")
+    try:
+        return base64.b64decode(audio_b64)
+    except Exception:
+        raise RuntimeError("Gemini bad audio payload")
+
+
+@app.post("/api/voice/speak")
+async def voice_speak(req: VoiceSpeakRequest):
+    text = (req.text or "").strip()
+    if not text or len(text) > 280:
+        voice_log.warning("speak 400: text length %d (must be 1..280 chars)", len(text))
+        return JSONResponse(status_code=400, content={"error": "text must be 1..280 chars", "retryable": False})
+    try:
+        auth_headers, auth_mode = _resolve_gemini_auth()
+    except RuntimeError as e:
+        voice_log.warning("speak 503: %s", str(e)[:160])
+        return JSONResponse(status_code=503, content={"error": str(e)[:200], "retryable": False})
+    try:
+        audio_bytes = _call_gemini_tts(auth_headers, text, req.voice)
+    except RuntimeError as e:
+        voice_log.warning("speak 502: Gemini TTS failed (%s) - text %d chars", str(e)[:120], len(text))
+        return JSONResponse(status_code=502, content={"error": str(e)[:160], "retryable": True})
+    except Exception:
+        voice_log.warning("speak 502: unexpected TTS failure - text %d chars", len(text))
+        return JSONResponse(status_code=502, content={"error": "voice speak failed", "retryable": True})
+    voice_log.info("speak 200: %d chars -> %d audio bytes (voice=%s)", len(text), len(audio_bytes), req.voice)
+    return Response(content=audio_bytes, media_type="audio/mpeg")

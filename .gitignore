@@ -5,3 +5,8 @@ __pycache__/
 data/*.db
 data/*.db-*
 screenshots/
+
+# Env secrets (voice assistant: GEMINI_API_KEY) — never commit
+.env
+.env.*
+!.env.example

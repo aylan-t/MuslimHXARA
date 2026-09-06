@@ -11,12 +11,16 @@ interface StepVehicleProps {
   vehicle: Vehicle;
   onChange: (updated: Partial<Vehicle>) => void;
   onNext: () => void;
+  voiceFilled?: string[];
+  confirmedFields?: string[];
 }
 
 export const StepVehicle: React.FC<StepVehicleProps> = ({
   vehicle,
   onChange,
-  onNext
+  onNext,
+  voiceFilled = [],
+  confirmedFields = []
 }) => {
   const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
   const vehicleAge = CURRENT_YEAR - vehicle.year;
@@ -55,6 +59,22 @@ export const StepVehicle: React.FC<StepVehicleProps> = ({
     vehicle.year >= 2000 &&
     vehicle.year <= CURRENT_YEAR &&
     vehicle.purchasePriceCad > 0;
+
+  // Voice assistant highlights (Agent 5): yellow flash on voice-filled fields,
+  // green ring once confirmed. Inputs stay editable; gating logic untouched.
+  const voiceFilledSet = new Set(voiceFilled);
+  const confirmedSet = new Set(confirmedFields);
+  const voiceFieldClass = (path: string): string => {
+    const parts: string[] = [];
+    if (voiceFilledSet.has(path)) parts.push('bg-yellow-100', 'transition-colors', 'duration-500');
+    if (confirmedSet.has(path)) parts.push('ring-2', 'ring-green-500');
+    return parts.join(' ');
+  };
+  const VoiceBadge: React.FC = () => (
+    <span className="mt-1 inline-block rounded-full bg-yellow-200 px-2 py-0.5 text-[11px] font-bold text-yellow-900">
+      filled by voice
+    </span>
+  );
 
   return (
     <div className="max-w-3xl mx-auto bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
@@ -96,27 +116,33 @@ export const StepVehicle: React.FC<StepVehicleProps> = ({
 
         {/* Ligne 1 : Marque & Modèle */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-          <AccessibleCombobox
-            label="Marque du véhicule"
-            value={vehicle.brand}
-            options={brandOptions}
-            placeholder="Commencez à taper, ex. Toy..."
-            required
-            onChange={(brand) => onChange({ brand, model: '' })}
-          />
-          <AccessibleCombobox
-            label="Modèle"
-            value={vehicle.model}
-            options={modelOptions}
-            placeholder={selectedBrand ? 'Commencez à taper le modèle' : 'Choisissez d’abord la marque'}
-            required
-            disabled={!vehicle.brand}
-            onChange={(model) => onChange({ model })}
-            onCommit={(model) => {
-              const match = selectedBrand?.models.find(item => item.name === model);
-              if (match) onChange({ model, category: match.category });
-            }}
-          />
+          <div className={`rounded-xl ${voiceFieldClass('vehicle.brand')}`}>
+            <AccessibleCombobox
+              label="Marque du véhicule"
+              value={vehicle.brand}
+              options={brandOptions}
+              placeholder="Commencez à taper, ex. Toy..."
+              required
+              onChange={(brand) => onChange({ brand, model: '' })}
+            />
+            {voiceFilledSet.has('vehicle.brand') && <VoiceBadge />}
+          </div>
+          <div className={`rounded-xl ${voiceFieldClass('vehicle.model')}`}>
+            <AccessibleCombobox
+              label="Modèle"
+              value={vehicle.model}
+              options={modelOptions}
+              placeholder={selectedBrand ? 'Commencez à taper le modèle' : 'Choisissez d’abord la marque'}
+              required
+              disabled={!vehicle.brand}
+              onChange={(model) => onChange({ model })}
+              onCommit={(model) => {
+                const match = selectedBrand?.models.find(item => item.name === model);
+                if (match) onChange({ model, category: match.category });
+              }}
+            />
+            {voiceFilledSet.has('vehicle.model') && <VoiceBadge />}
+          </div>
         </div>
         <p className="-mt-3 text-xs text-slate-500">
           Utilisez les flèches du clavier puis Entrée. Si votre véhicule est absent, vous pouvez conserver une saisie manuelle.
@@ -141,10 +167,11 @@ export const StepVehicle: React.FC<StepVehicleProps> = ({
                 max={CURRENT_YEAR}
                 value={vehicle.year}
                 onChange={handleYearChange}
-                className="w-full text-base px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 bg-slate-50/50"
+                className={`w-full text-base px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 bg-slate-50/50 ${voiceFieldClass('vehicle.year')}`}
               />
               <Calendar className="w-5 h-5 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             </div>
+            {voiceFilledSet.has('vehicle.year') && <VoiceBadge />}
           </div>
 
           <div>
@@ -161,12 +188,13 @@ export const StepVehicle: React.FC<StepVehicleProps> = ({
                 value={vehicle.purchasePriceCad || ''}
                 onChange={(e) => handleNumberChange('purchasePriceCad', e.target.value)}
                 placeholder="Ex : 14200"
-                className="w-full text-lg font-black px-4 py-3 rounded-xl border-2 border-brand-500 focus:ring-2 focus:ring-brand-500 bg-white text-slate-900 shadow-inner"
+                className={`w-full text-lg font-black px-4 py-3 rounded-xl border-2 border-brand-500 focus:ring-2 focus:ring-brand-500 bg-white text-slate-900 shadow-inner ${voiceFieldClass('vehicle.purchasePriceCad')}`}
               />
               <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 font-bold text-sm">
                 $ CAD
               </span>
             </div>
+            {voiceFilledSet.has('vehicle.purchasePriceCad') && <VoiceBadge />}
           </div>
         </div>
 
@@ -179,13 +207,14 @@ export const StepVehicle: React.FC<StepVehicleProps> = ({
             <select
               value={vehicle.category}
               onChange={(e) => onChange({ category: e.target.value as VehicleCategory })}
-              className="w-full text-base px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 bg-white"
+              className={`w-full text-base px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 bg-white ${voiceFieldClass('vehicle.category')}`}
             >
               <option value="suv">VUS / SUV (RAV4, CR-V, Tucson, etc.)</option>
               <option value="berline">Berline standard (Corolla, Civic, etc.)</option>
               <option value="citadine">Petite citadine / Compacte (Yaris, Fit)</option>
               <option value="camionnette">Camionnette / Pickup (Tacoma, F-150)</option>
             </select>
+            {voiceFilledSet.has('vehicle.category') && <VoiceBadge />}
           </div>
 
           <div>
@@ -199,10 +228,11 @@ export const StepVehicle: React.FC<StepVehicleProps> = ({
                 step="5000"
                 value={vehicle.mileageKm}
                 onChange={(e) => handleNumberChange('mileageKm', e.target.value)}
-                className="w-full text-base px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 bg-slate-50/50"
+                className={`w-full text-base px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 bg-slate-50/50 ${voiceFieldClass('vehicle.mileageKm')}`}
               />
               <Gauge className="w-5 h-5 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             </div>
+            {voiceFilledSet.has('vehicle.mileageKm') && <VoiceBadge />}
           </div>
         </div>
 

@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AutoTransat QC — Diagnostic</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; width: 420px; max-height: 560px; overflow: hidden;
+      font-family: Inter, system-ui, -apple-system, sans-serif;
+      background: #0f172a; color: #e2e8f0; font-size: 12px;
+      display: flex; flex-direction: column;
+    }
+    header { padding: 12px 14px 10px; border-bottom: 1px solid #334155; }
+    header h1 { margin: 0; font-size: 14px; font-weight: 800; color: #fff; }
+    header p { margin: 2px 0 0; color: #94a3b8; font-size: 11px; }
+    .badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .badge {
+      background: #1e293b; border: 1px solid #475569; border-radius: 999px;
+      padding: 2px 8px; font-size: 10.5px; font-weight: 700; color: #cbd5e1;
+    }
+    .badge b { color: #fff; }
+    .badge.live { border-color: #16a34a; color: #86efac; }
+    .toolbar {
+      display: flex; align-items: center; gap: 6px;
+      padding: 8px 14px; border-bottom: 1px solid #334155; flex-wrap: wrap;
+    }
+    button {
+      background: #0284c7; color: #fff; border: 0; border-radius: 8px;
+      padding: 5px 10px; font-size: 11px; font-weight: 700; cursor: pointer;
+    }
+    button:hover { background: #0369a1; }
+    button.ghost { background: #1e293b; color: #cbd5e1; border: 1px solid #475569; }
+    button.ghost:hover { background: #334155; }
+    label.debug { display: flex; align-items: center; gap: 5px; color: #cbd5e1; cursor: pointer; margin-left: auto; }
+    #status { padding: 4px 14px; min-height: 18px; color: #86efac; font-size: 11px; }
+    #listing { padding: 0 14px 6px; color: #94a3b8; font-size: 11px; }
+    #listing b { color: #e2e8f0; }
+    ol#logs {
+      list-style: none; margin: 0; padding: 8px 14px 14px; overflow-y: auto;
+      font-family: ui-monospace, Consolas, monospace; font-size: 11px; line-height: 1.45;
+    }
+    ol#logs li { padding: 3px 0; border-bottom: 1px solid #1e293b; word-break: break-word; }
+    ol#logs time { color: #64748b; margin-right: 6px; }
+    li.lvl-info time { color: #38bdf8; }
+    li.lvl-debug { color: #94a3b8; }
+    li.lvl-warn { color: #fbbf24; }
+    li.lvl-error { color: #f87171; font-weight: 700; }
+    .empty { color: #64748b; padding: 16px 0; text-align: center; font-family: Inter, system-ui, sans-serif; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>AutoTransat QC — Diagnostic</h1>
+    <p>Estimation locale sur Facebook Marketplace (aucun chiffre inventé).</p>
+    <div class="badges">
+      <span class="badge">Extension <b id="axc-ver">…</b></span>
+      <span class="badge">Moteur <b id="axc-engine">…</b></span>
+      <span class="badge" id="axc-built" title="Date de build">build …</span>
+    </div>
+  </header>
+  <div class="toolbar">
+    <button id="axc-refresh" class="ghost" type="button">Actualiser</button>
+    <button id="axc-copy" class="ghost" type="button">Copier</button>
+    <button id="axc-clear" class="ghost" type="button">Effacer</button>
+    <label class="debug"><input id="axc-debug" type="checkbox" /> Logs détaillés</label>
+  </div>
+  <div id="status" role="status"></div>
+  <div id="listing">Annonce active : <b id="axc-listing">—</b></div>
+  <ol id="logs"></ol>
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -23,6 +23,10 @@ const elig1 = checkEligibility(validSenegalVehicle, 'senegal', { country: 'seneg
 assert(elig1.isEligible === true, "Véhicule de 8 ans éligible au Sénégal");
 assert(elig1.severity === 'success', "Gravité success pour véhicule conforme");
 
+const currentYearVehicle = { ...DEMO_VEHICLE, year: CURRENT_YEAR };
+const currentYearEligibility = checkEligibility(currentYearVehicle, 'senegal', { country: 'senegal' }, DEFAULT_CONFIG);
+assert(currentYearEligibility.message.includes("moins d'un an"), "Un véhicule de l’année courante est présenté comme ayant moins d’un an");
+
 // TEST 2: Véhicule de plus de 10 ans au Sénégal -> Blocage
 const oldSenegalVehicle = { ...DEMO_VEHICLE, year: 2014 }; // 12 ans
 const elig2 = checkEligibility(oldSenegalVehicle, 'senegal', { country: 'senegal' }, DEFAULT_CONFIG);

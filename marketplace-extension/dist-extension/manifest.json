@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "AutoTransat QC — Estimation sur Facebook Marketplace",
+  "short_name": "AutoTransat QC",
+  "version": "1.3.1",
+  "description": "Affiche une estimation locale du coût rendu (Dakar/Casablanca) et du profit net sur les annonces véhicules Facebook Marketplace. Calcul 100 % local, aucun chiffre inventé.",
+  "minimum_chrome_version": "116",
+  "permissions": ["storage"],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "AutoTransat QC — logs & version"
+  },
+  "host_permissions": ["*://*.facebook.com/*"],
+  "optional_host_permissions": ["http://localhost:3000/*"],
+  "content_scripts": [
+    {
+      "matches": ["*://*.facebook.com/marketplace/item/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
