@@ -10,8 +10,12 @@ export interface ExtensionOptions {
   transferMethod: FinancingMethod;
 }
 
+// Dev URL Replit utilisée tant que l’application n’a pas encore de domaine publié.
+// Elle reste modifiable depuis la page Options de l’extension.
+export const DEFAULT_APP_URL = 'https://affd2521-e15e-41f1-9f07-2c61358ea6ec-00-2bj9x15jf2i1i.picard.replit.dev';
+
 export const DEFAULT_OPTIONS: ExtensionOptions = {
-  baseUrl: 'http://localhost:3000',
+  baseUrl: DEFAULT_APP_URL,
   destination: 'senegal',
   transferMethod: 'plateforme_transfert',
 };
@@ -39,6 +43,16 @@ function getStorageArea(): AxcStorageArea | null {
     chrome?: { storage?: { local?: AxcStorageArea } };
   };
   return g.chrome?.storage?.local ?? null;
+}
+
+function isLocalhostUrl(value: unknown): boolean {
+  if (typeof value !== 'string' || value.trim() === '') return false;
+  try {
+    const hostname = new URL(value).hostname.toLowerCase();
+    return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0';
+  } catch {
+    return false;
+  }
 }
 
 /** Normalise l'URL (http/https uniquement, sans slash final). Lève si invalide. */
@@ -72,24 +86,30 @@ export function sanitizeOptions(partial: Partial<ExtensionOptions>): ExtensionOp
 export async function loadExtensionOptions(): Promise<ExtensionOptions> {
   const area = getStorageArea();
   if (!area) {
-    return sanitizeOptions({
-      baseUrl: memoryFallback.get(STORAGE_KEY_BASE_URL) as string | undefined,
+    const rawBaseUrl = memoryFallback.get(STORAGE_KEY_BASE_URL) as string | undefined;
+    const options = sanitizeOptions({
+      baseUrl: isLocalhostUrl(rawBaseUrl) ? DEFAULT_APP_URL : rawBaseUrl,
       destination: memoryFallback.get(STORAGE_KEY_DESTINATION) as
         | DestinationCountry
         | undefined,
       transferMethod: memoryFallback.get(STORAGE_KEY_METHOD) as FinancingMethod | undefined,
     });
+    if (isLocalhostUrl(rawBaseUrl)) memoryFallback.set(STORAGE_KEY_BASE_URL, options.baseUrl);
+    return options;
   }
   const stored = await area.get([
     STORAGE_KEY_BASE_URL,
     STORAGE_KEY_DESTINATION,
     STORAGE_KEY_METHOD,
   ]);
-  return sanitizeOptions({
-    baseUrl: stored[STORAGE_KEY_BASE_URL] as string | undefined,
+  const rawBaseUrl = stored[STORAGE_KEY_BASE_URL] as string | undefined;
+  const options = sanitizeOptions({
+    baseUrl: isLocalhostUrl(rawBaseUrl) ? DEFAULT_APP_URL : rawBaseUrl,
     destination: stored[STORAGE_KEY_DESTINATION] as DestinationCountry | undefined,
     transferMethod: stored[STORAGE_KEY_METHOD] as FinancingMethod | undefined,
   });
+  if (isLocalhostUrl(rawBaseUrl)) await area.set({ [STORAGE_KEY_BASE_URL]: options.baseUrl });
+  return options;
 }
 
 export async function saveExtensionOptions(options: ExtensionOptions): Promise<ExtensionOptions> {

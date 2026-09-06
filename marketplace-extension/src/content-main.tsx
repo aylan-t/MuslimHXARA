@@ -14,7 +14,7 @@ import { DEFAULT_CONFIG } from './engine/defaultData';
 import { EXTENSION_ENGINE_VERSION } from './engine/version';
 import { applyLiveMarketRates, fetchLiveFxRates } from './fx';
 import { buildPrefillUrl } from './prefill';
-import { loadExtensionOptions } from './options';
+import { DEFAULT_OPTIONS, loadExtensionOptions } from './options';
 import { mountNode, mountOverlay, mountOverlaySkeleton, unmountOverlay } from './content';
 import { RejectionBlock } from './overlay-states';
 import type { DestinationCountry, GlobalReferenceConfig } from './engine/types';
@@ -28,7 +28,7 @@ import {
 let currentInputs: NormalizedInputs | null = null;
 let currentFxLive = false;
 let currentCalculationConfig: GlobalReferenceConfig = DEFAULT_CONFIG;
-let currentBaseUrl = 'http://localhost:3000';
+let currentBaseUrl = DEFAULT_OPTIONS.baseUrl;
 let currentDestination: DestinationCountry = 'senegal';
 let runToken = 0;
 /** Dernier `{id}::{h1}` traité jusqu'au bout + succès (overlay monté). */
@@ -134,7 +134,7 @@ async function runPipeline(listingId: string): Promise<void> {
       axcLog.warn('options illisibles, défauts utilisés', e instanceof Error ? e.message : e);
       return null;
     });
-    currentBaseUrl = opts?.baseUrl ?? 'http://localhost:3000';
+    currentBaseUrl = opts?.baseUrl ?? DEFAULT_OPTIONS.baseUrl;
     currentDestination = opts?.destination ?? 'senegal';
     axcLog.debug('options', { baseUrl: currentBaseUrl, destination: currentDestination });
 
