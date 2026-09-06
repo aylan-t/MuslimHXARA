@@ -1,13 +1,20 @@
 import os
 import time
+import json
 import math
+from datetime import datetime, timezone
 from typing import Dict, Any
+from urllib.request import Request, urlopen
+from urllib.error import HTTPError, URLError
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from backend.schemas import CalculationRequest, CalculationResponse, CostBreakdownResponse
 from backend.freight.routes import router as freight_router
 
 CURRENT_YEAR = 2026
+FX_API_URL = "https://open.er-api.com/v6/latest/CAD"
+FX_CACHE_TTL_SECONDS = 15 * 60
+_fx_cache: Dict[str, Any] = {"payload": None, "expiresAt": 0.0}
 
 app = FastAPI(
     title="AutoTransat QC API",
@@ -95,6 +102,71 @@ def read_root():
 @app.get("/api/config")
 def get_config():
     return DEFAULT_CONFIG
+
+
+def _iso_from_unix(value: Any) -> str | None:
+    try:
+        return datetime.fromtimestamp(float(value), tz=timezone.utc).isoformat()
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+
+def _fetch_market_fx_rates() -> Dict[str, Any]:
+    now = time.time()
+    cached = _fx_cache.get("payload")
+    if cached and now < _fx_cache["expiresAt"]:
+        return {**cached, "cacheStatus": "cached"}
+
+    request = Request(FX_API_URL, headers={"Accept": "application/json", "User-Agent": "AutoTransatQC/1.0"})
+    try:
+        with urlopen(request, timeout=8) as response:
+            data = json.load(response)
+    except (HTTPError, URLError, TimeoutError, OSError, ValueError) as error:
+        if cached:
+            raise HTTPException(
+                status_code=503,
+                detail="La source de change n’est pas joignable et le dernier taux en cache est expiré.",
+            ) from error
+        raise HTTPException(
+            status_code=503,
+            detail="La source de change n’est pas joignable; aucun taux courant n’est disponible.",
+        ) from error
+
+    rates = data.get("rates") if isinstance(data, dict) else None
+    if not isinstance(data, dict) or data.get("result") != "success" or not isinstance(rates, dict):
+        raise HTTPException(status_code=502, detail="La source de change a renvoyé une réponse invalide.")
+
+    try:
+        cad_to_mad = float(rates["MAD"])
+        cad_to_xof = float(rates["XOF"])
+    except (KeyError, TypeError, ValueError) as error:
+        raise HTTPException(status_code=502, detail="La source ne fournit pas MAD et XOF pour le CAD.") from error
+    if cad_to_mad <= 0 or cad_to_xof <= 0:
+        raise HTTPException(status_code=502, detail="La source de change a renvoyé un taux non valide.")
+
+    provider_updated_at = _iso_from_unix(data.get("time_last_update_unix"))
+    next_update_at = _iso_from_unix(data.get("time_next_update_unix"))
+    payload = {
+        "CAD_to_MAD": round(cad_to_mad, 6),
+        "CAD_to_XOF": round(cad_to_xof, 6),
+        "lastUpdated": provider_updated_at or datetime.now(timezone.utc).isoformat(),
+        "providerUpdatedAt": provider_updated_at,
+        "nextUpdateAt": next_update_at,
+        "fetchedAt": datetime.now(timezone.utc).isoformat(),
+        "isLive": True,
+        "cacheStatus": "live",
+        "sourceName": "ExchangeRate-API Open — taux indicatif de marché",
+        "officialSourceUrl": FX_API_URL,
+    }
+    _fx_cache["payload"] = payload
+    _fx_cache["expiresAt"] = now + FX_CACHE_TTL_SECONDS
+    return payload
+
+
+@app.get("/api/fx-rates")
+def get_fx_rates():
+    """Return the latest published CAD market rates for both destination currencies."""
+    return _fetch_market_fx_rates()
 
 
 @app.post("/api/calculate", response_model=CalculationResponse)

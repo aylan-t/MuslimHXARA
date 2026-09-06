@@ -94,7 +94,14 @@ export function App() {
             CAD_to_MAD: liveData.CAD_to_MAD,
             CAD_to_XOF: liveData.CAD_to_XOF,
             lastUpdated: liveData.lastUpdated,
-            isLive: liveData.isLive
+            isLive: liveData.isLive,
+            officialSourceUrl: liveData.officialSourceUrl,
+            providerUpdatedAt: liveData.providerUpdatedAt,
+            nextUpdateAt: liveData.nextUpdateAt,
+            fetchedAt: liveData.fetchedAt,
+            cacheStatus: liveData.cacheStatus,
+            sourceName: liveData.sourceName,
+            errorMessage: undefined
           }
         };
         saveStoredConfig(updated);
@@ -102,6 +109,15 @@ export function App() {
       });
     } catch (e) {
       console.error('Erreur récupération taux:', e);
+      setConfig(prev => ({
+        ...prev,
+        fxRates: {
+          ...prev.fxRates,
+          isLive: false,
+          cacheStatus: 'unavailable',
+          errorMessage: 'Source de change indisponible; valeur précédente conservée et non présentée comme actuelle.'
+        }
+      }));
     } finally {
       setIsRefreshingRates(false);
     }

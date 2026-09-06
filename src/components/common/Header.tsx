@@ -51,7 +51,21 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, onLoadD
             {items.map(({ id, label, icon: Icon }) => <button key={id} onClick={() => { onSelectTab(id); setMobileOpen(false); }} className={`flex min-h-[48px] w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold transition-colors ${currentTab === id ? 'bg-white text-[hsl(var(--navy-deep))]' : 'text-slate-300 hover:bg-white/10 hover:text-white'}`} title={collapsed ? label : undefined}><Icon className="h-5 w-5 shrink-0" /><span className={collapsed ? 'hidden' : ''}>{label}</span>{!collapsed && currentTab === id && <ChevronRight className="ml-auto h-4 w-4" />}</button>)}
             <button onClick={onOpenSourcesModal} className="flex min-h-[48px] w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-emerald-200 hover:bg-white/10" title="Sources et fiabilité"><ShieldCheck className="h-5 w-5 shrink-0" /><span className={collapsed ? 'hidden' : ''}>Sources et fiabilité</span></button>
           </nav>
-          <div className={`rounded-xl bg-white/10 p-3 text-xs text-slate-300 ${collapsed ? 'hidden' : ''}`}><div className="flex items-center justify-between font-semibold text-white"><span>Taux indicatifs</span><button onClick={onRefreshLiveRates} disabled={isRefreshingRates} aria-label="Actualiser les taux"><RefreshCw className={`h-4 w-4 ${isRefreshingRates ? 'animate-spin' : ''}`} /></button></div><div className="mt-2">1 CAD = {config.fxRates.CAD_to_MAD} MAD</div><div>1 CAD = {config.fxRates.CAD_to_XOF} XOF</div></div>
+           <div className={`rounded-xl bg-white/10 p-3 text-xs text-slate-300 ${collapsed ? 'hidden' : ''}`}>
+             <div className="flex items-center justify-between font-semibold text-white">
+               <span>Taux API indicatifs</span>
+               <button onClick={onRefreshLiveRates} disabled={isRefreshingRates} aria-label="Actualiser les taux">
+                 <RefreshCw className={`h-4 w-4 ${isRefreshingRates ? 'animate-spin' : ''}`} />
+               </button>
+             </div>
+             <div className="mt-2">1 CAD = {config.fxRates.CAD_to_MAD.toFixed(2)} MAD</div>
+             <div>1 CAD = {config.fxRates.CAD_to_XOF.toFixed(1)} XOF</div>
+             <div className={`mt-2 text-[10px] ${config.fxRates.isLive ? 'text-emerald-200' : 'text-amber-200'}`}>
+               {config.fxRates.isLive ? 'Dernière donnée publiée par l’API :' : 'API indisponible — taux précédent :'}
+               {config.fxRates.providerUpdatedAt ? ` ${new Date(config.fxRates.providerUpdatedAt).toLocaleString('fr-CA')}` : ' date inconnue'}
+             </div>
+             <div className="mt-1 text-[10px] text-slate-400">Source : {config.fxRates.sourceName || 'ExchangeRate-API Open'}</div>
+           </div>
           <button onClick={onLoadDemo} className={`mt-3 flex min-h-[48px] items-center justify-center gap-2 rounded-xl bg-[hsl(var(--signal))] px-3 text-sm font-bold text-[hsl(var(--navy-deep))] hover:brightness-105 ${collapsed ? 'px-0' : ''}`} title="Charger un exemple"><Sparkles className="h-4 w-4" /><span className={collapsed ? 'hidden' : ''}>Voir un exemple</span></button>
         </div>
       </header>

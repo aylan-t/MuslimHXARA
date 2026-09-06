@@ -160,6 +160,10 @@ export const StepFinancing: React.FC<StepFinancingProps> = ({
             <div className="text-sm font-bold text-slate-900">
               1 $ CA indicatif = {baseRate.toFixed(2)} {currencyCode} → Taux net obtenu : <span className="text-emerald-700">{effectiveRate.toFixed(2)} {currencyCode}</span>
             </div>
+            <div className={`mt-1 text-[11px] ${config.fxRates.isLive ? 'text-emerald-700' : 'text-amber-700'}`}>
+              {config.fxRates.isLive ? 'Taux récupéré par API' : 'API indisponible : taux précédent, à reconfirmer'}
+              {config.fxRates.providerUpdatedAt && ` · cotation du ${new Date(config.fxRates.providerUpdatedAt).toLocaleString('fr-CA')}`}
+            </div>
           </div>
           <div className="text-right flex-shrink-0">
             <span className="text-slate-500">Coût retenu sur le change :</span>

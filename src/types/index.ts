@@ -328,6 +328,12 @@ export interface GlobalReferenceConfig {
     lastUpdated: string;
     isLive?: boolean;
     officialSourceUrl?: string;
+    providerUpdatedAt?: string | null;
+    nextUpdateAt?: string | null;
+    fetchedAt?: string;
+    cacheStatus?: 'live' | 'cached' | 'unavailable';
+    sourceName?: string;
+    errorMessage?: string;
   };
   quebecRegions: QuebecOriginRegion[];
   officialSources: OfficialSource[];
