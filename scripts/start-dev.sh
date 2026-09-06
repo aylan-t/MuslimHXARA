@@ -4,7 +4,7 @@ set -uo pipefail
 python -m uvicorn backend.main:app --host 0.0.0.0 --port 5001 &
 backend_pid=$!
 
-npm run dev -- --host 0.0.0.0 --port 5000 &
+npm run dev:web -- --host 0.0.0.0 --port 5000 --strictPort &
 frontend_pid=$!
 
 cleanup() {
