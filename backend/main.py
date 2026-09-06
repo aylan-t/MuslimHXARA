@@ -167,10 +167,10 @@ def _iso_from_unix(value: Any) -> str | None:
         return None
 
 
-def _fetch_market_fx_rates() -> Dict[str, Any]:
+def _fetch_market_fx_rates(force_refresh: bool = False) -> Dict[str, Any]:
     now = time.time()
     cached = _fx_cache.get("payload")
-    if cached and now < _fx_cache["expiresAt"]:
+    if not force_refresh and cached and now < _fx_cache["expiresAt"]:
         return {**cached, "cacheStatus": "cached"}
 
     request = Request(FX_API_URL, headers={"Accept": "application/json", "User-Agent": "AutoTransatQC/1.0"})
@@ -220,9 +220,9 @@ def _fetch_market_fx_rates() -> Dict[str, Any]:
 
 
 @app.get("/api/fx-rates")
-def get_fx_rates():
+def get_fx_rates(refresh: bool = False):
     """Return the latest published CAD market rates for both destination currencies."""
-    return _fetch_market_fx_rates()
+    return _fetch_market_fx_rates(force_refresh=refresh)
 
 
 @app.post("/api/calculate", response_model=CalculationResponse)

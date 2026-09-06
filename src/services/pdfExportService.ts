@@ -35,7 +35,7 @@ export async function generateSimulationPdf(sim: SimulationResult): Promise<void
   };
 
   page.drawRectangle({ x: 0, y: 755, width: 595.28, height: 87, color: navy });
-  text('AUTOTRANSAT QC', margin, 804, 19, bold, rgb(1, 1, 1));
+  text('QCAR EXPORT', margin, 804, 19, bold, rgb(1, 1, 1));
   text('Étude de rentabilité export automobile', margin, 783, 10, regular, rgb(0.78, 0.88, 0.91));
   text(new Date(sim.createdAt).toLocaleDateString('fr-CA'), 460, 804, 9, regular, rgb(1, 1, 1));
 
@@ -93,5 +93,5 @@ export async function generateSimulationPdf(sim: SimulationResult): Promise<void
   text(`Référence ${sim.id.slice(0, 18)}`, margin, 53, 7.5, regular, muted);
 
   const bytes = await document.save();
-  download(bytes, `AutoTransat_${sim.vehicle.brand}_${sim.vehicle.model}_${sim.destination}.pdf`);
+  download(bytes, `QCar_export_${sim.vehicle.brand}_${sim.vehicle.model}_${sim.destination}.pdf`);
 }

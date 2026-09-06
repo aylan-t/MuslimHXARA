@@ -290,7 +290,7 @@ export const StepTransport: React.FC<StepTransportProps> = ({
             <div className="flex-1">
               <h3 className="font-bold text-slate-900">Détails du devis</h3>
               <p className="mt-1 text-xs leading-relaxed text-slate-600">
-                Saisissez-le ici pour remplacer le budget indicatif de fret. Le document reste déclaré par vous et n’est pas validé par AutoTransat QC.
+                Saisissez-le ici pour remplacer le budget indicatif de fret. Le document reste déclaré par vous et n’est pas validé par QCar export.
               </p>
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
                 <label className="text-xs font-bold text-slate-700">

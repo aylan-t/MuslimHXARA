@@ -383,7 +383,7 @@ export function calculateSimulation(
     ...(hasCarrierQuote
       ? [`Fret basé sur un devis transporteur validé provenant de ${validMarketOffer?.provider}.`]
       : hasUserDocumentedQuote
-        ? [`Fret basé sur le document ${validCarrierQuote?.reference || 'fourni'} déclaré par l’utilisateur; son authenticité n’est pas vérifiée par AutoTransat QC.`]
+        ? [`Fret basé sur le document ${validCarrierQuote?.reference || 'fourni'} déclaré par l’utilisateur; son authenticité n’est pas vérifiée par QCar export.`]
         : hasMarketOffer
         ? [`Fret basé sur une estimation marketplace ${validMarketOffer?.provider} récupérée le ${new Date(validMarketOffer!.retrievedAt).toLocaleDateString('fr-CA')}; confirmation requise.`]
         : ['Fret maritime indicatif : un devis officiel du transporteur est requis avant engagement.']),

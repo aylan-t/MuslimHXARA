@@ -5,6 +5,7 @@ import { GlobalReferenceConfig } from '../../types';
 interface HeaderProps {
   currentTab: 'wizard' | 'results' | 'cargo' | 'optimizer' | 'history' | 'config';
   onSelectTab: (tab: HeaderProps['currentTab']) => void;
+  onNewSimulation: () => void;
   onLoadDemo: () => void;
   hasCurrentResult: boolean;
   config: GlobalReferenceConfig;
@@ -14,7 +15,7 @@ interface HeaderProps {
   onCollapsedChange?: (collapsed: boolean) => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, onLoadDemo, hasCurrentResult, config, onRefreshLiveRates, isRefreshingRates, onOpenSourcesModal, onCollapsedChange }) => {
+export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, onNewSimulation, onLoadDemo, hasCurrentResult, config, onRefreshLiveRates, isRefreshingRates, onOpenSourcesModal, onCollapsedChange }) => {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const items = [
@@ -41,14 +42,14 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, onLoadD
         </button>
         <div className="flex h-full flex-col px-3 py-4">
           <div className="flex items-center justify-between px-2 pb-5 pr-10">
-            <button onClick={() => onSelectTab('wizard')} className="flex items-center gap-3 text-left group" aria-label="Accueil AutoTransat QC">
+             <button onClick={() => onSelectTab('wizard')} className="flex items-center gap-3 text-left group" aria-label="Accueil QCar export">
               <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[hsl(var(--teal))] shadow-lg transition-transform group-hover:scale-105"><Ship className="h-6 w-6" /></span>
-              <span className={collapsed ? 'hidden' : ''}><span className="block font-display text-lg font-bold tracking-tight">AutoTransat <em className="not-italic text-[hsl(var(--signal))]">QC</em></span><span className="block text-[11px] text-slate-400">Votre conseiller export</span></span>
+               <span className={collapsed ? 'hidden' : ''}><span className="block font-display text-lg font-bold tracking-tight">QCar <em className="not-italic text-[hsl(var(--signal))]">export</em></span><span className="block text-[11px] text-slate-400">Votre conseiller export</span></span>
             </button>
             <button onClick={() => setMobileOpen(false)} className="rounded-lg p-2 hover:bg-white/10 md:hidden" aria-label="Fermer le menu"><X className="h-5 w-5" /></button>
           </div>
           <nav className="flex-1 space-y-1" aria-label="Navigation principale">
-            {items.map(({ id, label, icon: Icon }) => <button key={id} onClick={() => { onSelectTab(id); setMobileOpen(false); }} className={`flex min-h-[48px] w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold transition-colors ${currentTab === id ? 'bg-white text-[hsl(var(--navy-deep))]' : 'text-slate-300 hover:bg-white/10 hover:text-white'}`} title={collapsed ? label : undefined}><Icon className="h-5 w-5 shrink-0" /><span className={collapsed ? 'hidden' : ''}>{label}</span>{!collapsed && currentTab === id && <ChevronRight className="ml-auto h-4 w-4" />}</button>)}
+             {items.map(({ id, label, icon: Icon }) => <button key={id} onClick={() => { if (id === 'wizard') onNewSimulation(); else onSelectTab(id); setMobileOpen(false); }} className={`flex min-h-[48px] w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold transition-colors ${currentTab === id ? 'bg-white text-[hsl(var(--navy-deep))]' : 'text-slate-300 hover:bg-white/10 hover:text-white'}`} title={collapsed ? label : undefined}><Icon className="h-5 w-5 shrink-0" /><span className={collapsed ? 'hidden' : ''}>{label}</span>{!collapsed && currentTab === id && <ChevronRight className="ml-auto h-4 w-4" />}</button>)}
             <button onClick={onOpenSourcesModal} className="flex min-h-[48px] w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-emerald-200 hover:bg-white/10" title="Sources et fiabilité"><ShieldCheck className="h-5 w-5 shrink-0" /><span className={collapsed ? 'hidden' : ''}>Sources et fiabilité</span></button>
           </nav>
            <div className={`rounded-xl bg-white/10 p-3 text-xs text-slate-300 ${collapsed ? 'hidden' : ''}`}>

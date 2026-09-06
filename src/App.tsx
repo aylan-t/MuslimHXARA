@@ -68,6 +68,29 @@ const INITIAL_VEHICLE: Vehicle = {
   isNonRunning: false
 };
 
+const INITIAL_FINANCING: FinancingConfig = {
+  method: 'plateforme_transfert',
+  fixedFeeCad: 15,
+  variableFeePercent: 0.7,
+  fxSpreadPercent: 1.2
+};
+
+const INITIAL_TRANSPORT: TransportSelection = {
+  routeId: 'mtl-dkr-roro',
+  batchVehiclesCount: 1
+};
+
+const INITIAL_CUSTOMS: CustomsSelection = {
+  country: 'senegal',
+  valuationBasis: 'invoice',
+  moroccoOptions: {
+    isMRE: false,
+    mreAgeOver60: false,
+    residenceOver10Years: false,
+    isFirstCarInLife: false
+  }
+};
+
 export interface VoiceRecapState {
   lines: string[];
   snapshot: string;
@@ -179,26 +202,9 @@ export function App() {
   // Formulaire d'entrée
   const [vehicle, setVehicle] = useState<Vehicle>(INITIAL_VEHICLE);
   const [destination, setDestination] = useState<DestinationCountry>('senegal');
-  const [financing, setFinancing] = useState<FinancingConfig>({
-    method: 'plateforme_transfert',
-    fixedFeeCad: 15,
-    variableFeePercent: 0.7,
-    fxSpreadPercent: 1.2
-  });
-  const [transport, setTransport] = useState<TransportSelection>({
-    routeId: 'mtl-dkr-roro',
-    batchVehiclesCount: 1
-  });
-  const [customs, setCustoms] = useState<CustomsSelection>({
-    country: 'senegal',
-    valuationBasis: 'invoice',
-    moroccoOptions: {
-      isMRE: false,
-      mreAgeOver60: false,
-      residenceOver10Years: false,
-      isFirstCarInLife: false
-    }
-  });
+  const [financing, setFinancing] = useState<FinancingConfig>(INITIAL_FINANCING);
+  const [transport, setTransport] = useState<TransportSelection>(INITIAL_TRANSPORT);
+  const [customs, setCustoms] = useState<CustomsSelection>(INITIAL_CUSTOMS);
   const [targetMargin, setTargetMargin] = useState<number>(18);
   const [prefillMeta, setPrefillMeta] = useState<PrefillMeta | null>(null);
 
@@ -640,7 +646,7 @@ export function App() {
 
   // Récupération des taux de change en direct au montage
   useEffect(() => {
-    handleRefreshLiveRates();
+    void handleRefreshLiveRates();
   }, []);
 
   useEffect(() => {
@@ -663,10 +669,10 @@ export function App() {
     }
   }, []);
 
-  const handleRefreshLiveRates = async () => {
+  const handleRefreshLiveRates = async (forceRefresh = false) => {
     setIsRefreshingRates(true);
     try {
-      const liveData = await fetchLiveFxRates();
+      const liveData = await fetchLiveFxRates(forceRefresh);
       setConfig(prev => {
         const updated = {
           ...prev,
@@ -869,8 +875,31 @@ export function App() {
 
   // Réinitialiser pour une nouvelle simulation
   const handleNewSimulation = () => {
+    voiceLoopRef.current?.stop();
+    stopPlayback();
+    voiceOnRef.current = false;
+    confirmedRef.current = [];
+    frozenRef.current = [];
+    strikesRef.current = {};
     setRecap(null);
     setVehicle(INITIAL_VEHICLE);
+    setDestination('senegal');
+    setFinancing(INITIAL_FINANCING);
+    setTransport(INITIAL_TRANSPORT);
+    setCustoms(INITIAL_CUSTOMS);
+    setTargetMargin(18);
+    setPrefillMeta(null);
+    setVoiceOn(false);
+    setVoiceState('idle');
+    setNextPrompt(undefined);
+    setVoiceError(null);
+    setConfirmedFields([]);
+    setVoiceFilledFields([]);
+    setFutureHits([]);
+    setLowConfStrikes({});
+    setFrozenFields([]);
+    setMissingFields([]);
+    setOfflineMode(false);
     setCurrentStep(1);
     setMaxReachedStep(1);
     setCurrentResult(null);
@@ -899,10 +928,11 @@ export function App() {
       <Header
         currentTab={currentTab}
         onSelectTab={setCurrentTab}
+        onNewSimulation={handleNewSimulation}
         onLoadDemo={handleLoadDemo}
         hasCurrentResult={currentResult !== null}
         config={config}
-        onRefreshLiveRates={handleRefreshLiveRates}
+        onRefreshLiveRates={() => { void handleRefreshLiveRates(true); }}
         isRefreshingRates={isRefreshingRates}
         onOpenSourcesModal={() => setIsSourcesModalOpen(true)}
         onCollapsedChange={setIsNavigationCollapsed}
@@ -1096,7 +1126,7 @@ export function App() {
       {/* Pied de page sobre */}
       <footer className="bg-[hsl(var(--surface))] border-t border-[hsl(var(--line))] py-6 text-center text-xs text-slate-500">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <span>AutoTransat QC · Solution d'aide à la décision pour l'export automobile Québec → Maroc & Sénégal</span>
+          <span>QCar export · Solution d'aide à la décision pour l'export automobile Québec → Maroc & Sénégal</span>
           <span className="text-slate-400">Règles douanières : Décret Sénégal du 24 oct. 2025 & Régime MRE Maroc</span>
         </div>
       </footer>
