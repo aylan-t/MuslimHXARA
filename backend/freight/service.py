@@ -178,7 +178,7 @@ class FreightService:
         ]
         rfq = {"id": identifier, "reference": "ATQC-" + identifier[-8:].upper(),
                "createdAt": utc_now(), "status": "pending", "emailSent": False,
-               "message": "Demande enregistrée; ouvrez un canal officiel ci-dessous pour la transmettre.",
+               "message": "Demande enregistrée dans AutoTransat, mais pas encore envoyée à un transporteur. Ouvrez un canal officiel ci-dessous pour la transmettre.",
                "channels": channels, **payload}
         self.repository.save_rfq(rfq)
         return rfq

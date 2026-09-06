@@ -207,9 +207,9 @@ export const FreightComparison: React.FC<FreightComparisonProps> = ({
               {rfq ? (
                 <div className="mt-3 rounded-lg bg-white p-3">
                   <p className="text-xs font-semibold text-emerald-900">
-                    Demande créée{rfq.reference || rfq.id ? ` — référence ${rfq.reference ?? rfq.id}` : ''}{rfq.status ? ` (${rfq.status})` : ''}.
-                    {rfq.emailSent ? ' L’API confirme l’envoi par courriel.' : ''}
-                    {rfq.message ? ` ${rfq.message}` : ''}
+                    {rfq.emailSent ? 'Demande envoyée.' : 'Demande enregistrée dans AutoTransat — pas encore envoyée.'}
+                    {rfq.reference || rfq.id ? ` Référence : ${rfq.reference ?? rfq.id}.` : ''}
+                    {rfq.emailSent ? ' L’API confirme l’envoi par courriel.' : ' Cliquez sur un bouton ci-dessous pour ouvrir le formulaire officiel du fournisseur.'}
                   </p>
                   {(rfq.channels?.length ?? 0) > 0 && (
                     <div className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -228,7 +228,7 @@ export const FreightComparison: React.FC<FreightComparisonProps> = ({
                     </div>
                   )}
                   {!rfq.emailSent && (
-                    <p className="mt-2 text-[11px] text-slate-600">La transmission n’est pas automatique : utilisez un des liens officiels et conservez la référence AutoTransat dans votre demande.</p>
+                    <p className="mt-2 text-[11px] text-slate-600">La transmission n’est pas automatique : copiez la référence AutoTransat dans votre demande au transporteur. Le statut « en attente » signifie que nous attendons encore sa réponse.</p>
                   )}
                 </div>
               ) : <button type="submit" disabled={rfqLoading} className="mt-3 inline-flex min-h-[42px] items-center gap-2 rounded-xl bg-amber-700 px-4 text-xs font-black text-white hover:bg-amber-800 disabled:opacity-60">{rfqLoading && <Loader2 className="h-4 w-4 animate-spin" />}Créer la demande de devis</button>}
